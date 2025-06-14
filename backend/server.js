@@ -1,8 +1,11 @@
+require("dotenv").config(); // load environment variables
 const express = require('express'); // import express
 const mongoose = require('mongoose'); // import mongoose for DB
 const connectDB = require('./config/db'); // import DB connection
+
+const path = require("path");
 const cors= require('cors'); // allow frontend requests
-require("dotenv").config(); // load environment variables
+
 
 const app = express(); // create express app
 
@@ -11,6 +14,16 @@ app.use(express.json()); // parse incoming JSON requests
 
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
+
+const studentRoutes = require('./routes/studentRoutes');
+app.use('/api/student', studentRoutes);
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+const passwordRoutes = require("./routes/passwordRoutes");
+app.use("/api/password", passwordRoutes);
+
+
 
 connectDB(); // connect to MongoDB
 
