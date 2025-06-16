@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const { encryptField, decryptField } = require("../utils/encryptionUtils");
+const { hashPassword } = require("../utils/hashUtils");
 
 // Define student schema
 const studentSchema = new mongoose.Schema({
@@ -18,11 +20,15 @@ const studentSchema = new mongoose.Schema({
         required: true,
         unique: true,
         lowercase: true,
-        trim: true
+        trim: true,
+        set: encryptField,
+        get: decryptField,
     },
     mobile: {
         type: String,
         required: true,
+        set: encryptField,
+        get: decryptField,
     },
     password: {
         type: String,
@@ -38,5 +44,15 @@ const studentSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+
+studentSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  this.password = await hashPassword(this.password);
+  next();
+});
+
+
+
 
 module.exports = mongoose.model('Student', studentSchema);

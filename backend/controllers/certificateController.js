@@ -3,38 +3,10 @@ const Student = require("../models/Student");
 const sendEmail = require("../utils/sendEmail");
 const generateSubmissionEmail = require("../utils/emailTemplates");
 
+// ========== Apply for Certificate (Initial Save with Files) ==========
 const applyCertificate = async (req, res) => {
   try {
     const studentId = req.user.id;
-    const student = await Student.findById(studentId);
-
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-
-    if (!student.isVerified) {
-      return res.status(403).json({ message: "Email not verified. Please verify your account." });
-    }
-
-    // Check for existing unprocessed application
-    const existingApp = await Certificate.findOne({
-      student: studentId,
-      status: { $in: ["Draft", "Submitted", "Pending"] }
-    });
-
-    if (existingApp) {
-      return res.status(400).json({
-        message: "You already have a pending or draft application. Please wait for it to be processed."
-      });
-    }
-
-    // Access file paths
-    const aadharFile = req.files?.aadhar?.[0];
-    const marksheetFile = req.files?.marksheet?.[0];
-
-    if (!aadharFile || !marksheetFile) {
-      return res.status(400).json({ message: "Both Aadhar and Marksheet files are required." });
-    }
 
     const {
       name,
@@ -45,10 +17,10 @@ const applyCertificate = async (req, res) => {
       course,
       school,
       department,
-      academicSession
+      academicSession,
     } = req.body;
 
-    const newCert = new Certificate({
+    const certificate = new Certificate({
       student: studentId,
       name,
       rollNo,
@@ -59,130 +31,116 @@ const applyCertificate = async (req, res) => {
       school,
       department,
       academicSession,
-      aadharUrl: aadharFile.path,
-      marksheetUrl: marksheetFile.path,
-      status: "Draft"
+      aadharUrl: req.files?.aadhar?.[0]?.path || "",
+      marksheetUrl: req.files?.marksheet?.[0]?.path || "",
+      status: "Draft",
     });
 
-    await newCert.save();
+    await certificate.save();
 
-    // Send draft saved email
-    await sendEmail({
-      to: student.email,
-      subject: "Draft Application Saved",
-      html: `<p>Hi ${student.name},</p>
-             <p>Your Character Certificate application has been saved as <strong>Draft</strong>.</p>
-             <p>You can edit and submit it anytime.</p>
-             <p><em>Application ID:</em> ${newCert._id}</p>`
+    res.status(201).json({
+      message: "Application saved as draft successfully",
+      certificate,
     });
-
-    return res.status(201).json({
-      message: "Certificate application saved as draft",
-      applicationId: newCert._id
-    });
-
-  } catch (err) {
-    console.error("Error in applyCertificate:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+  } catch (error) {
+    console.error("Error applying for certificate:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
-const submitApplication = async (req, res) => {
-  try {
-    const studentId = req.user.id;
-
-    const draft = await Certificate.findOne({
-      student: studentId,
-      status: "Draft"
-    });
-
-    if (!draft) {
-      return res.status(400).json({ message: "No draft application found to submit." });
-    }
-
-    draft.status = "Submitted";
-    draft.submittedAt = Date.now();
-    await draft.save();
-
-    // Fetch student for email
-    const student = await Student.findById(studentId);
-
-    // Send beautiful email
-    const html = generateSubmissionEmail(student.name, student.rollNo, draft.submittedAt);
-    await sendEmail({
-      to: student.email,
-      subject: "Certificate Application Submitted",
-      html,
-    });
-
-    return res.status(200).json({ message: "Application submitted and email sent." });
-
-  } catch (err) {
-    console.error("Error in submitApplication:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
-  }
-};
-
+// ========== Submit Final Certificate Application ==========
 const submitCertificateApplication = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    // Find the latest draft application
-    const draftApp = await Certificate.findOne({
-      student: studentId,
-      status: "Draft"
-    }).sort({ createdAt: -1 });
+    const certificate = await Certificate.findOne({ student: studentId });
 
-    if (!draftApp) {
-      return res.status(404).json({ message: "No draft application found to submit." });
+    if (!certificate) {
+      return res.status(404).json({ message: "Application not found" });
     }
 
-    // Update the status and submission date
-    draftApp.status = "Submitted";
-    draftApp.submittedAt = new Date();
-    await draftApp.save();
+    if (certificate.status !== "Draft") {
+      return res.status(400).json({ message: "Application already submitted or processed" });
+    }
 
-    return res.status(200).json({
-      message: "Application submitted successfully.",
-      applicationId: draftApp._id
-    });
+    certificate.status = "Submitted";
 
-  } catch (err) {
-    console.error("Error in submitCertificateApplication:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+    await certificate.save();
+
+    // Send email to student
+    const student = await Student.findById(studentId);
+    const emailContent = generateSubmissionEmail(student.name, certificate.rollNo);
+
+    await sendEmail(student.email, "Certificate Application Submitted", emailContent);
+
+    res.status(200).json({ message: "Application submitted successfully" });
+  } catch (error) {
+    console.error("Error submitting application:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
+// ========== Submit Application (Alternative Endpoint) ==========
+const submitApplication = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    const certificate = await Certificate.findOne({ student: studentId });
+
+    if (!certificate) {
+      return res.status(404).json({ message: "Application not found" });
+    }
+
+    if (certificate.status !== "Draft") {
+      return res.status(400).json({ message: "Application already submitted or processed" });
+    }
+
+    certificate.status = "Submitted";
+
+    await certificate.save();
+
+    res.status(200).json({ message: "Application submitted successfully" });
+  } catch (error) {
+    console.error("Error submitting application:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// ========== Get Application Status ==========
 const getApplicationStatus = async (req, res) => {
   try {
     const studentId = req.user.id;
-    const cert = await Certificate.findOne({ student: studentId })
-      .sort({ createdAt: -1 })
-      .select("status submittedAt createdAt");
 
-    if (!cert) {
-      return res.status(404).json({ message: "No application found." });
+    const certificate = await Certificate.findOne({ student: studentId });
+
+    if (!certificate) {
+      return res.status(200).json({ status: "No application" });
     }
 
-    return res.status(200).json({
-      message: "Application status fetched successfully",
-      status: cert.status,
-      submittedAt: cert.submittedAt,
-      createdAt: cert.createdAt,
+    res.status(200).json({
+      status: certificate.status,
+      certificate,
     });
-  } catch (err) {
-    console.error("Error in getApplicationStatus:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+  } catch (error) {
+    console.error("Error fetching application status:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
-const editDraftApplication = async (req, res) => {
+
+
+// ========== Save as Draft (Fresh or Update) ==========
+const saveAsDraft = async (req, res) => {
   try {
     const studentId = req.user.id;
-    const cert = await Certificate.findOne({ student: studentId, status: "Draft" });
 
-    if (!cert) {
-      return res.status(400).json({ message: "No draft application to edit." });
+    let certificate = await Certificate.findOne({ student: studentId });
+
+    if (!certificate) {
+      certificate = new Certificate({
+        student: studentId,
+        status: "Draft",
+      });
     }
 
     const {
@@ -197,47 +155,95 @@ const editDraftApplication = async (req, res) => {
       academicSession,
     } = req.body;
 
-    const aadharFile = req.files?.aadhar?.[0];
-    const marksheetFile = req.files?.marksheet?.[0];
+    certificate.name = name || certificate.name;
+    certificate.rollNo = rollNo || certificate.rollNo;
+    certificate.gender = gender || certificate.gender;
+    certificate.maritalStatus = maritalStatus || certificate.maritalStatus;
+    certificate.careOf = careOf || certificate.careOf;
+    certificate.course = course || certificate.course;
+    certificate.school = school || certificate.school;
+    certificate.department = department || certificate.department;
+    certificate.academicSession = academicSession || certificate.academicSession;
 
-    // Update only provided fields
-    if (name) cert.name = name;
-    if (rollNo) cert.rollNo = rollNo;
-    if (gender) cert.gender = gender;
-    if (maritalStatus) cert.maritalStatus = maritalStatus;
-    if (careOf) cert.careOf = careOf;
-    if (course) cert.course = course;
-    if (school) cert.school = school;
-    if (department) cert.department = department;
-    if (academicSession) cert.academicSession = academicSession;
-    if (aadharFile) cert.aadharUrl = aadharFile.path;
-    if (marksheetFile) cert.marksheetUrl = marksheetFile.path;
+    if (req.files?.aadhar) {
+      certificate.aadharUrl = req.files.aadhar[0].path;
+    }
 
-    await cert.save();
+    if (req.files?.marksheet) {
+      certificate.marksheetUrl = req.files.marksheet[0].path;
+    }
 
-    const student = await Student.findById(studentId);
-    await sendEmail({
-      to: student.email,
-      subject: "Draft Application Updated",
-      html: `<p>Hi ${student.name},</p>
-             <p>Your draft Character Certificate application has been <strong>updated</strong>.</p>
-             <p>Remember to submit when ready. Application ID: ${cert._id}</p>`
+    await certificate.save();
+
+    res.status(200).json({
+      message: "Draft saved successfully",
+      certificate,
     });
-
-    return res.status(200).json({
-      message: "Draft application updated successfully",
-      applicationId: cert._id,
-    });
-  } catch (err) {
-    console.error("Error in editDraftApplication:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+  } catch (error) {
+    console.error("Error saving draft:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
+// ========== Update Full Draft Application (When Not Yet Submitted) ==========
+const updateDraftApplication = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    const application = await Certificate.findOne({ student: studentId, status: "Draft" });
+
+    if (!application) {
+      return res.status(404).json({ message: "No draft found" });
+    }
+
+    const {
+      name,
+      rollNo,
+      gender,
+      maritalStatus,
+      careOf,
+      course,
+      school,
+      department,
+      academicSession,
+    } = req.body;
+
+    if (name) application.name = name;
+    if (rollNo) application.rollNo = rollNo;
+    if (gender) application.gender = gender;
+    if (maritalStatus) application.maritalStatus = maritalStatus;
+    if (careOf) application.careOf = careOf;
+    if (course) application.course = course;
+    if (school) application.school = school;
+    if (department) application.department = department;
+    if (academicSession) application.academicSession = academicSession;
+
+    if (req.files?.aadhar) {
+      application.aadharUrl = req.files.aadhar[0].path;
+    }
+
+    if (req.files?.marksheet) {
+      application.marksheetUrl = req.files.marksheet[0].path;
+    }
+
+    await application.save();
+
+    res.status(200).json({
+      message: "Draft updated successfully",
+      application,
+    });
+  } catch (error) {
+    console.error("Update Draft Error:", error.message);
+    res.status(500).json({ message: "Server Error", error: error.message });
+  }
+};
+
+// ========== Export All Controllers ==========
 module.exports = {
   applyCertificate,
-  submitApplication,
   submitCertificateApplication,
+  submitApplication,
   getApplicationStatus,
-  editDraftApplication,
+  saveAsDraft,
+  updateDraftApplication,
 };

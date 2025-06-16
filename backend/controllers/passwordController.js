@@ -2,15 +2,15 @@ const Student = require("../models/Student");
 const sendEmail = require("../utils/sendEmail");
 const generateResetOTPTemplate = require("../utils/emailTemplates/resetOtpTemplate");
 const passwordChangedTemplate = require("../utils/emailTemplates/passwordChangedTemplate");
+const bcrypt = require("bcrypt");
 
 // 1. Request OTP for Forgot Password
 const sendForgotPasswordOtp = async (req, res) => {
   try {
     const { email } = req.body;
-
     if (!email) return res.status(400).json({ message: "Email is required" });
 
-    const student = await Student.findOne({ email });
+    const student = await Student.findOne({ email }); // email assumed encrypted via schema middleware
     if (!student) return res.status(404).json({ message: "No student found with this email" });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -18,7 +18,6 @@ const sendForgotPasswordOtp = async (req, res) => {
     await student.save();
 
     const html = generateResetOTPTemplate(student.name, otp);
-
     await sendEmail({
       to: email,
       subject: "OTP to Reset Your Password",
@@ -43,16 +42,21 @@ const resetPassword = async (req, res) => {
     }
 
     const student = await Student.findOne({ email });
-
     if (!student) return res.status(404).json({ message: "Student not found" });
-    if (student.otp !== otp) return res.status(401).json({ message: "Invalid OTP" });
 
-    student.password = newPassword;
+    if (student.otp !== otp) {
+      return res.status(401).json({ message: "Invalid OTP" });
+    }
+
+    // Hash the new password before saving
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    student.password = hashedPassword;
     student.otp = null; // Clear OTP
     await student.save();
 
     const html = passwordChangedTemplate(student.name);
-
     await sendEmail({
       to: email,
       subject: "Password Successfully Changed",

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
+const verifyToken = require("../middleware/verifyToken");
 
 const { getStudentDashboard } = require("../controllers/studentController");
 
@@ -10,7 +11,7 @@ const {
   submitApplication,
   submitCertificateApplication,
   getApplicationStatus,
-  editDraftApplication
+  updateDraftApplication
 } = require("../controllers/certificateController");
 
 // Student Dashboard
@@ -36,6 +37,9 @@ router.post(
 // Get current application status
 router.get("/status", authMiddleware, getApplicationStatus);
 
+
+router.get("/dashboard", verifyToken, getStudentDashboard);
+
 // Edit draft application
 router.put(
   "/edit",
@@ -44,7 +48,7 @@ router.put(
     { name: "aadhar", maxCount: 1 },
     { name: "marksheet", maxCount: 1 },
   ]),
-  editDraftApplication
+  updateDraftApplication
 );
 
 module.exports = router;

@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const Student = require("../models/Student");
 const sendEmail = require("../utils/sendEmail");
 const loginAlertTemplate = require("../utils/emailTemplates/loginAlertTemplate");
+const { comparePassword } = require("../utils/hashUtils");
 
 // Register Student and Send OTP Email
 const register = async (req, res) => {
@@ -57,7 +58,8 @@ const login = async (req, res) => {
       return res.status(404).json({ message: "No student found with given Email or Roll No" });
     }
 
-    if (student.password !== password) {
+    const isMatch = await comparePassword(password, student.password);
+    if (!isMatch) {
       return res.status(401).json({ message: "Incorrect password" });
     }
 

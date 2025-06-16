@@ -23,6 +23,13 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const passwordRoutes = require("./routes/passwordRoutes");
 app.use("/api/password", passwordRoutes);
 
+const profileEditRoutes = require("./routes/profileEditRoutes");
+app.use("/api/profile", profileEditRoutes);
+
+const certificateRoutes = require("./routes/certificateRoutes");
+app.use("/api/certificates", certificateRoutes);
+
+
 
 
 connectDB(); // connect to MongoDB

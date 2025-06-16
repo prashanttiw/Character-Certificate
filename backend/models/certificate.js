@@ -10,7 +10,7 @@ const certificateSchema = new mongoose.Schema(
     name: { type: String, required: true },
     rollNo: { type: String, required: true },
     gender: { type: String, enum: ["Male", "Female", "Other"] },
-    maritalStatus: { type: String, enum: ["Single", "Married", "Other"] },
+    maritalStatus: { type: String, enum: ["Married", "Unmarried"] },
     careOf: { type: String },
     course: { type: String, required: true },
     school: { type: String },
