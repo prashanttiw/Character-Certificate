@@ -10,7 +10,7 @@ const {
   saveAsDraft,
   updateDraftApplication, // ✅ New controller
 } = require("../controllers/certificateController");
-const verifyToken = require("../middleware/authMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
 
 
 //  Multer Configuration 
@@ -33,22 +33,22 @@ const fileUploadMiddleware = upload.fields([
 //  Certificate Routes 
 
 // Save draft application with uploads
-router.post("/save-draft", verifyToken, fileUploadMiddleware, saveAsDraft);
+router.post("/save-draft", authMiddleware, fileUploadMiddleware, saveAsDraft);
 
 
 // ✅ Update draft application with full data + files
-router.put("/update-draft", verifyToken, fileUploadMiddleware, updateDraftApplication);
+router.put("/update-draft", authMiddleware, fileUploadMiddleware, updateDraftApplication);
 
 // Apply for certificate (initial creation with files)
-router.post("/apply", verifyToken, fileUploadMiddleware, applyCertificate);
+router.post("/apply", authMiddleware, fileUploadMiddleware, applyCertificate);
 
 // Submit certificate (without payment step for now)
-router.post("/submit", verifyToken, submitApplication);
+router.post("/submit", authMiddleware, submitApplication);
 
 // Submit final application (might be replaced by payment + OTP later)
-router.post("/submit-final", verifyToken, submitCertificateApplication);
+router.post("/submit-final", authMiddleware, submitCertificateApplication);
 
 // Get current application status
-router.get("/status", verifyToken, getApplicationStatus);
+router.get("/status", authMiddleware, getApplicationStatus);
 
 module.exports = router;

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
-const verifyToken = require("../middleware/verifyToken");
+
 
 const { getStudentDashboard } = require("../controllers/studentController");
 
@@ -38,7 +38,7 @@ router.post(
 router.get("/status", authMiddleware, getApplicationStatus);
 
 
-router.get("/dashboard", verifyToken, getStudentDashboard);
+
 
 // Edit draft application
 router.put(

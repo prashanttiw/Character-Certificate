@@ -12,6 +12,15 @@ const app = express(); // create express app
 app.use(cors()); // use cors middleware
 app.use(express.json()); // parse incoming JSON requests
 
+app.use((req, res, next) => {
+  console.log("🧪 DEBUG Middleware Triggered");
+  console.log("🔍 Method:", req.method);
+  console.log("🔍 URL:", req.url);
+  console.log("🔍 Content-Type:", req.headers["content-type"]);
+  console.log("🔍 Body:", req.body);
+  next();
+});
+
 const authRoutes = require('./routes/authRoutes');
 app.use('/api/auth', authRoutes);
 

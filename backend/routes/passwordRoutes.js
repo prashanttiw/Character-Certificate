@@ -2,13 +2,15 @@ const express = require("express");
 const router = express.Router();
 const {
   sendForgotPasswordOtp,
-  resetPassword,
+  resetPassword
 } = require("../controllers/passwordController");
 
 const { otpLimiter } = require("../middleware/rateLimiter");
 
-// Apply rate limiter to prevent abuse (especially OTP endpoint)
-router.post("/forgot-password", otpLimiter, sendForgotPasswordOtp);
-router.post("/reset-password", resetPassword); // Optional: you can also apply a limiter here
+// STEP 1: Request OTP for password reset
+router.post("/forgot/send-otp", otpLimiter, sendForgotPasswordOtp);
+
+// STEP 2: Verify OTP and set new password
+router.post("/forgot/verify-otp", resetPassword);
 
 module.exports = router;
