@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { ArrowRight, KeyRound, Mail, Shield } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
-import {
-  Mail,
-  Lock,
-  Eye,
-  EyeOff,
-  Shield,
-  Send,
-  RotateCw,
-  KeyRound,
-} from "lucide-react";
+import { authAPI } from "@/services/auth";
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || fallback;
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -23,156 +18,173 @@ export default function ForgotPassword() {
     newPassword: "",
     confirmPassword: "",
   });
-
   const [otpSent, setOtpSent] = useState(false);
-  const [timer, setTimer] = useState(0);
-  const [showPass, setShowPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleInput = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const sendOtp = () => {
-    if (!form.email) {
-      toast.error("Email is required!");
+  const handleSendOtp = async () => {
+    if (!form.email.trim()) {
+      toast.error("Enter the email linked to your student account.");
       return;
     }
-    toast.success("OTP sent to your email!");
-    setOtpSent(true);
-    setTimer(30);
-    const interval = setInterval(() => {
-      setTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+
+    setSendingOtp(true);
+
+    try {
+      await authAPI.sendForgotPasswordOtp(form.email.trim());
+      setOtpSent(true);
+      toast.success("OTP sent. Use it below to choose a new password.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to send password reset OTP."));
+    } finally {
+      setSendingOtp(false);
+    }
   };
 
-  const handleReset = () => {
-    const { email, otp, newPassword, confirmPassword } = form;
-    if (!email || !otp || !newPassword || !confirmPassword) {
-      toast.error("All fields are required!");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("Passwords do not match!");
+  const handleReset = async (event) => {
+    event.preventDefault();
+
+    if (!form.email || !form.otp || !form.newPassword || !form.confirmPassword) {
+      toast.error("Complete all fields to reset your password.");
       return;
     }
 
-    toast.success("Password reset successfully!");
-    navigate("/login");
+    if (form.newPassword !== form.confirmPassword) {
+      toast.error("New password and confirm password must match.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await authAPI.resetPassword(
+        form.email.trim(),
+        form.otp.trim(),
+        form.newPassword
+      );
+      toast.success("Password updated. You can sign in now.");
+      navigate("/login");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Password reset failed."));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-white text-black flex items-center justify-center">
-      <Card className="w-[500px] bg-white border border-gray-200 shadow-lg rounded-xl">
-        <CardContent className="p-6 space-y-5">
-          <h2 className="text-3xl font-bold text-center text-black">
-            Forgot Password
-          </h2>
+    <Card className="auth-card">
+      <CardHeader className="space-y-4">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--brand-2)]/20 bg-[var(--brand-1)]/10 px-3 py-1 text-sm font-medium text-[var(--brand-2)]">
+          <Shield className="size-4" />
+          Secure password recovery
+        </div>
+        <CardTitle className="font-display text-4xl tracking-tight text-[var(--ink-1)]">
+          Reset your password
+        </CardTitle>
+        <CardDescription className="max-w-md text-base leading-7 text-[var(--ink-3)]">
+          Request a password reset OTP, confirm it, and set a fresh password without
+          leaving the portal flow.
+        </CardDescription>
+      </CardHeader>
 
-          <div className="relative">
-            <Mail className="absolute left-3 top-2.5 text-gray-400" size={18} />
-            <Input
-              placeholder="Email"
-              name="email"
-              value={form.email}
-              onChange={handleInput}
-              className="pl-10"
-            />
-          </div>
+      <CardContent>
+        <form className="space-y-4" onSubmit={handleReset}>
+          <label className="form-field">
+            <span className="form-label">Email</span>
+            <div className="form-input-shell">
+              <Mail className="form-icon" />
+              <Input
+                type="email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="student@example.com"
+                className="auth-input"
+              />
+            </div>
+          </label>
 
-          <div className="flex justify-between items-center">
-            <div className="flex-1 relative">
+          <div className="rounded-[24px] border border-dashed border-[var(--line-strong)] bg-[var(--surface-2)]/65 p-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+              <label className="form-field flex-1">
+                <span className="form-label">OTP</span>
+                <div className="form-input-shell">
+                  <Shield className="form-icon" />
+                  <Input
+                    name="otp"
+                    value={form.otp}
+                    onChange={handleChange}
+                    placeholder="Enter OTP"
+                    className="auth-input"
+                  />
+                </div>
+              </label>
+
               <Button
-                onClick={sendOtp}
-                className="text-sm px-4 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer shadow-sm transition duration-200"
-                disabled={timer > 0}
+                type="button"
+                onClick={handleSendOtp}
+                disabled={sendingOtp}
+                className="h-12 rounded-2xl bg-[var(--brand-2)] px-6 text-white shadow-[0_20px_50px_rgba(120,53,15,0.18)] hover:bg-[var(--brand-2)]/92"
               >
-                {timer > 0 ? (
-                  <>
-                    <RotateCw size={16} />
-                    Resend in {timer}s
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Send OTP
-                  </>
-                )}
+                {sendingOtp ? "Sending..." : otpSent ? "Resend OTP" : "Send OTP"}
               </Button>
             </div>
           </div>
 
-          {otpSent && (
-            <div className="relative">
-              <Shield className="absolute left-3 top-2.5 text-gray-400" size={18} />
-              <Input
-                placeholder="Enter OTP"
-                name="otp"
-                value={form.otp}
-                onChange={handleInput}
-                className="pl-10"
-              />
-            </div>
-          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="form-field">
+              <span className="form-label">New Password</span>
+              <div className="form-input-shell">
+                <KeyRound className="form-icon" />
+                <Input
+                  type="password"
+                  name="newPassword"
+                  value={form.newPassword}
+                  onChange={handleChange}
+                  placeholder="Create new password"
+                  className="auth-input"
+                />
+              </div>
+            </label>
 
-          <div className="relative">
-            <Lock className="absolute left-3 top-2.5 text-gray-400" size={18} />
-            <Input
-              placeholder="New Password"
-              name="newPassword"
-              type={showPass ? "text" : "password"}
-              value={form.newPassword}
-              onChange={handleInput}
-              className="pl-10 pr-10"
-            />
-            <span
-              className="absolute right-3 top-2.5 text-gray-500 cursor-pointer"
-              onClick={() => setShowPass(!showPass)}
-            >
-              {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
-            </span>
-          </div>
-
-          <div className="relative">
-            <Lock className="absolute left-3 top-2.5 text-gray-400" size={18} />
-            <Input
-              placeholder="Confirm Password"
-              name="confirmPassword"
-              type={showConfirmPass ? "text" : "password"}
-              value={form.confirmPassword}
-              onChange={handleInput}
-              className="pl-10 pr-10"
-            />
-            <span
-              className="absolute right-3 top-2.5 text-gray-500 cursor-pointer"
-              onClick={() => setShowConfirmPass(!showConfirmPass)}
-            >
-              {showConfirmPass ? <EyeOff size={18} /> : <Eye size={18} />}
-            </span>
+            <label className="form-field">
+              <span className="form-label">Confirm Password</span>
+              <div className="form-input-shell">
+                <KeyRound className="form-icon" />
+                <Input
+                  type="password"
+                  name="confirmPassword"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Repeat new password"
+                  className="auth-input"
+                />
+              </div>
+            </label>
           </div>
 
           <Button
-            onClick={handleReset}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md flex items-center justify-center gap-2 cursor-pointer transition duration-200"
+            type="submit"
+            disabled={submitting}
+            className="h-12 w-full rounded-2xl bg-[var(--brand-1)] text-base font-semibold text-white shadow-[0_20px_50px_rgba(217,119,6,0.28)] transition hover:bg-[var(--brand-2)]"
           >
-            <KeyRound size={18} />
-            Reset Password
+            {submitting ? "Updating..." : "Reset Password"}
+            <ArrowRight className="size-4" />
           </Button>
+        </form>
 
-          <p className="text-sm text-center text-gray-600">
-            Remember your password?{" "}
-            <a href="/login" className="text-blue-600 hover:underline">
-              Go to Login
-            </a>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+        <p className="mt-6 text-sm text-[var(--ink-3)]">
+          Remembered it?{" "}
+          <Link to="/login" className="auth-link">
+            Return to login
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

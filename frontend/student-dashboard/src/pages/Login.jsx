@@ -1,77 +1,119 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { ArrowRight, LockKeyhole, Mail, ShieldCheck } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { Mail, Lock, LogIn, Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || fallback;
 
 export default function Login() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "" });
-  const [showPass, setShowPass] = useState(false);
+  const { login } = useAuth();
+  const [form, setForm] = useState({
+    emailOrRollNo: "",
+    password: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLogin = () => {
-    const { email, password } = form;
-    if (!email || !password) return toast.error("Please fill all fields.");
-    toast.success("Logged in successfully!");
-    navigate("/dashboard");
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!form.emailOrRollNo.trim() || !form.password.trim()) {
+      toast.error("Enter your email or roll number and password.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await login(form.emailOrRollNo, form.password);
+      toast.success("Login successful. Your dashboard is ready.");
+      navigate("/dashboard");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to sign you in right now."));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <Card className="w-full max-w-md rounded-xl bg-white shadow-2xl animate-fade-in">
-        <CardContent className="p-8 space-y-6">
-          <h2 className="text-2xl font-bold text-center text-black">🔐 Student Login</h2>
+    <Card className="auth-card">
+      <CardHeader className="space-y-4">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--brand-2)]/20 bg-[var(--brand-1)]/10 px-3 py-1 text-sm font-medium text-[var(--brand-2)]">
+          <ShieldCheck className="size-4" />
+          Live backend login
+        </div>
+        <CardTitle className="font-display text-4xl tracking-tight text-[var(--ink-1)]">
+          Welcome back
+        </CardTitle>
+        <CardDescription className="max-w-md text-base leading-7 text-[var(--ink-3)]">
+          Sign in with your email or roll number to manage certificate requests,
+          track status, and keep your student records moving.
+        </CardDescription>
+      </CardHeader>
 
-          <div className="relative">
-            <Mail className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Email or Roll No."
-              className="pl-12 py-3"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
-          </div>
-
-          <div className="relative">
-            <Lock className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Password"
-              type={showPass ? "text" : "password"}
-              className="pl-12 pr-12 py-3"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-            <div
-              className="absolute right-3 top-4 cursor-pointer text-gray-500"
-              onClick={() => setShowPass(!showPass)}
-            >
-              {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
+      <CardContent>
+        <form className="space-y-5" onSubmit={handleSubmit}>
+          <label className="form-field">
+            <span className="form-label">Email or Roll Number</span>
+            <div className="form-input-shell">
+              <Mail className="form-icon" />
+              <Input
+                name="emailOrRollNo"
+                value={form.emailOrRollNo}
+                onChange={handleChange}
+                placeholder="ROLL2025001 or testuser@example.com"
+                className="auth-input"
+              />
             </div>
-          </div>
+          </label>
+
+          <label className="form-field">
+            <span className="form-label">Password</span>
+            <div className="form-input-shell">
+              <LockKeyhole className="form-icon" />
+              <Input
+                type="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="Enter your password"
+                className="auth-input"
+              />
+            </div>
+          </label>
 
           <Button
-            onClick={handleLogin}
-            className="w-full flex gap-2 justify-center bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 rounded-lg shadow-md"
+            type="submit"
+            disabled={submitting}
+            className="h-12 w-full rounded-2xl bg-[var(--brand-1)] text-base font-semibold text-white shadow-[0_20px_50px_rgba(217,119,6,0.28)] transition hover:bg-[var(--brand-2)]"
           >
-            <LogIn size={18} />
-            Login
+            {submitting ? "Signing in..." : "Open Dashboard"}
+            <ArrowRight className="size-4" />
           </Button>
+        </form>
 
-          <div className="text-center text-sm text-gray-600">
-            <a href="/forgot-password" className="text-blue-600 hover:underline">
-              Forgot Password?
-            </a>
-          </div>
-          <div className="text-center text-sm text-gray-600">
-            Don't have an account?{" "}
-            <a href="/register" className="text-blue-600 hover:underline">
-              Register
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        <div className="mt-6 flex flex-col gap-2 text-sm text-[var(--ink-3)] sm:flex-row sm:items-center sm:justify-between">
+          <Link to="/forgot-password" className="auth-link">
+            Forgot password?
+          </Link>
+          <p>
+            New student?{" "}
+            <Link to="/register" className="auth-link">
+              Create your account
+            </Link>
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -43,37 +44,48 @@
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
+  --background: oklch(0.98 0.015 85);
+  --foreground: oklch(0.28 0.03 40);
+  --card: oklch(1 0 0 / 0.82);
+  --card-foreground: oklch(0.28 0.03 40);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.28 0.03 40);
+  --primary: oklch(0.7 0.18 58);
+  --primary-foreground: oklch(0.99 0.01 90);
+  --secondary: oklch(0.94 0.025 85);
+  --secondary-foreground: oklch(0.28 0.03 40);
+  --muted: oklch(0.95 0.02 85);
+  --muted-foreground: oklch(0.53 0.02 52);
+  --accent: oklch(0.95 0.04 72);
+  --accent-foreground: oklch(0.28 0.03 40);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  --border: oklch(0.88 0.03 82);
+  --input: oklch(0.99 0.005 85 / 0.85);
+  --ring: oklch(0.74 0.14 64);
+  --chart-1: oklch(0.72 0.17 58);
+  --chart-2: oklch(0.58 0.08 190);
+  --chart-3: oklch(0.48 0.08 142);
+  --chart-4: oklch(0.82 0.13 93);
+  --chart-5: oklch(0.76 0.14 34);
   --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
+  --sidebar-foreground: oklch(0.28 0.03 40);
+  --sidebar-primary: oklch(0.7 0.18 58);
+  --sidebar-primary-foreground: oklch(0.99 0.01 90);
+  --sidebar-accent: oklch(0.95 0.02 85);
+  --sidebar-accent-foreground: oklch(0.28 0.03 40);
+  --sidebar-border: oklch(0.88 0.03 82);
+  --sidebar-ring: oklch(0.74 0.14 64);
+  --surface-0: #fffaf0;
+  --surface-1: #f8f2e8;
+  --surface-2: #fff7ec;
+  --ink-1: #2c2218;
+  --ink-2: #5a4734;
+  --ink-3: #7a6652;
+  --brand-1: #d97706;
+  --brand-2: #9a3412;
+  --brand-3: #0f766e;
+  --line-soft: rgba(154, 52, 18, 0.14);
+  --line-strong: rgba(154, 52, 18, 0.28);
 }
 
 .dark {
@@ -114,8 +126,250 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: "Manrope", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(245, 158, 11, 0.16), transparent 32%),
+      radial-gradient(circle at 90% 10%, rgba(15, 118, 110, 0.12), transparent 28%),
+      linear-gradient(180deg, #fffaf0 0%, #f8f2e8 100%);
   }
 }
 
+#root {
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: "Fraunces", serif;
+}
+
+.grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(154, 52, 18, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(154, 52, 18, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 90%);
+  pointer-events: none;
+}
+
+.aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.aurora-one {
+  top: -120px;
+  left: -60px;
+  height: 320px;
+  width: 320px;
+  background: rgba(245, 158, 11, 0.26);
+}
+
+.aurora-two {
+  right: -80px;
+  top: 140px;
+  height: 280px;
+  width: 280px;
+  background: rgba(15, 118, 110, 0.18);
+}
+
+.aurora-three {
+  top: 60px;
+  right: -60px;
+  height: 260px;
+  width: 260px;
+  background: rgba(217, 119, 6, 0.16);
+}
+
+.auth-card,
+.dashboard-card {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 22px 65px rgba(122, 102, 82, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(18px);
+}
+
+.auth-card {
+  overflow: hidden;
+  border-radius: 32px;
+}
+
+.form-field {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.form-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.form-input-shell {
+  position: relative;
+}
+
+.form-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  z-index: 1;
+  height: 1rem;
+  width: 1rem;
+  transform: translateY(-50%);
+  color: var(--ink-3);
+}
+
+.auth-input,
+.dashboard-input,
+.dashboard-select,
+.dashboard-file {
+  min-height: 3.1rem;
+  border-radius: 18px;
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.9);
+  padding-inline: 1rem;
+  color: var(--ink-1);
+}
+
+.auth-input {
+  padding-left: 2.8rem;
+}
+
+.dashboard-select {
+  appearance: none;
+}
+
+.auth-link {
+  color: var(--brand-2);
+  font-weight: 700;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+.feature-tile {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 24px;
+  padding: 1rem;
+  box-shadow: 0 18px 45px rgba(122, 102, 82, 0.1);
+}
+
+.feature-title {
+  margin-top: 0.9rem;
+  font-weight: 800;
+  color: var(--ink-1);
+}
+
+.feature-copy {
+  margin-top: 0.35rem;
+  color: var(--ink-3);
+  line-height: 1.7;
+}
+
+.dashboard-hero {
+  display: grid;
+  gap: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 36px;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.14), transparent 28%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 247, 236, 0.82));
+  box-shadow: 0 24px 70px rgba(122, 102, 82, 0.14);
+}
+
+.hero-stat {
+  border-radius: 24px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 1rem;
+}
+
+.hero-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 9999px;
+  background: rgba(217, 119, 6, 0.12);
+  color: var(--brand-2);
+}
+
+.hero-stat-label {
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.hero-stat-value {
+  margin-top: 0.3rem;
+  font-weight: 800;
+  color: var(--ink-1);
+}
+
+.upload-tile {
+  display: grid;
+  gap: 0.8rem;
+  border-radius: 24px;
+  border: 1px dashed var(--line-strong);
+  background: rgba(255, 247, 236, 0.85);
+  padding: 1rem;
+}
+
+.upload-copy {
+  font-size: 0.9rem;
+  color: var(--ink-3);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(154, 52, 18, 0.08);
+  padding-bottom: 0.85rem;
+}
+
+.info-row span {
+  color: var(--ink-3);
+}
+
+.info-row strong {
+  color: var(--ink-1);
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .dashboard-hero {
+    padding: 1.5rem;
+  }
+
+  .info-row {
+    flex-direction: column;
+  }
+
+  .info-row strong {
+    text-align: left;
+  }
+}

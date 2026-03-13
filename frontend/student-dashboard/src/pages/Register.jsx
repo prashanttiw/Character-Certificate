@@ -1,176 +1,253 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Card, CardContent } from "@/components/ui/card";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { ArrowRight, KeyRound, Mail, Phone, Send, UserRound } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import {
-  Mail,
-  User,
-  Phone,
-  Lock,
-  Eye,
-  EyeOff,
-  Send,
-  RotateCw,
-  UserPlus,
-} from "lucide-react";
+import { authAPI } from "@/services/auth";
+
+const initialForm = {
+  name: "",
+  rollNo: "",
+  email: "",
+  mobile: "",
+  password: "",
+  confirmPassword: "",
+  otp: "",
+};
+
+const getErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || fallback;
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    name: "",
-    rollNo: "",
-    email: "",
-    mobile: "",
-    password: "",
-    confirmPassword: "",
-    otp: "",
-  });
-  const [showPass, setShowPass] = useState(false);
-  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [form, setForm] = useState(initialForm);
   const [otpSent, setOtpSent] = useState(false);
-  const [timer, setTimer] = useState(0);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
-  const sendOtp = () => {
-    if (!form.email) return toast.error("Email is required!");
-    toast.success("OTP sent ✔️");
-    setOtpSent(true);
-    setTimer(30);
-    const interval = setInterval(() => {
-      setTimer((t) => (t > 1 ? t - 1 : (clearInterval(interval), 0)));
-    }, 1000);
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
   };
 
-  const handleRegister = () => {
-    const { name, rollNo, email, mobile, password, confirmPassword, otp } = form;
-    if (!name || !rollNo || !email || !mobile || !password || !confirmPassword || !otp)
-      return toast.error("All fields are required.");
-    if (password !== confirmPassword) return toast.error("Passwords do not match!");
-    toast.success("Registered successfully!");
-    navigate("/login");
+  const validateBaseForm = () => {
+    const { name, rollNo, email, mobile, password, confirmPassword } = form;
+
+    if (!name || !rollNo || !email || !mobile || !password || !confirmPassword) {
+      toast.error("Complete all registration fields before requesting OTP.");
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Password and confirm password must match.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSendOtp = async () => {
+    if (!validateBaseForm()) return;
+
+    setSendingOtp(true);
+
+    try {
+      await authAPI.sendRegistrationOtp({
+        name: form.name.trim(),
+        rollNo: form.rollNo.trim(),
+        email: form.email.trim(),
+        mobile: form.mobile.trim(),
+        password: form.password,
+      });
+
+      setOtpSent(true);
+      toast.success("OTP sent. Check your email and complete verification.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Unable to send OTP right now."));
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleRegister = async (event) => {
+    event.preventDefault();
+
+    if (!validateBaseForm()) return;
+    if (!form.otp.trim()) {
+      toast.error("Enter the OTP sent to your email.");
+      return;
+    }
+
+    setVerifying(true);
+
+    try {
+      await authAPI.verifyRegistrationOtp(form.email.trim(), form.otp.trim());
+      toast.success("Registration complete. Please log in.");
+      navigate("/login");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "OTP verification failed."));
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <Card className="w-full max-w-md rounded-xl bg-white shadow-2xl animate-fade-in">
-        <CardContent className="p-8 space-y-6">
-          <h2 className="text-2xl font-bold text-center text-black">📝 Student Register</h2>
+    <Card className="auth-card">
+      <CardHeader className="space-y-4">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--brand-2)]/20 bg-[var(--brand-1)]/10 px-3 py-1 text-sm font-medium text-[var(--brand-2)]">
+          <Send className="size-4" />
+          OTP registration flow
+        </div>
+        <CardTitle className="font-display text-4xl tracking-tight text-[var(--ink-1)]">
+          Create your student account
+        </CardTitle>
+        <CardDescription className="max-w-md text-base leading-7 text-[var(--ink-3)]">
+          Fill in your academic details, request a verification code, and activate
+          your portal account in one smooth pass.
+        </CardDescription>
+      </CardHeader>
 
-          <div className="relative">
-            <User className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Full Name"
-              className="pl-12 py-3"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
+      <CardContent>
+        <form className="space-y-4" onSubmit={handleRegister}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="form-field">
+              <span className="form-label">Full Name</span>
+              <div className="form-input-shell">
+                <UserRound className="form-icon" />
+                <Input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Anjali Sharma"
+                  className="auth-input"
+                />
+              </div>
+            </label>
+
+            <label className="form-field">
+              <span className="form-label">Roll Number</span>
+              <div className="form-input-shell">
+                <UserRound className="form-icon" />
+                <Input
+                  name="rollNo"
+                  value={form.rollNo}
+                  onChange={handleChange}
+                  placeholder="ROLL2025001"
+                  className="auth-input"
+                />
+              </div>
+            </label>
           </div>
 
-          <div className="relative">
-            <User className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Roll Number"
-              className="pl-12 py-3"
-              value={form.rollNo}
-              onChange={(e) => setForm({ ...form, rollNo: e.target.value })}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="form-field">
+              <span className="form-label">Email</span>
+              <div className="form-input-shell">
+                <Mail className="form-icon" />
+                <Input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="student@example.com"
+                  className="auth-input"
+                />
+              </div>
+            </label>
+
+            <label className="form-field">
+              <span className="form-label">Mobile Number</span>
+              <div className="form-input-shell">
+                <Phone className="form-icon" />
+                <Input
+                  name="mobile"
+                  value={form.mobile}
+                  onChange={handleChange}
+                  placeholder="9876543210"
+                  className="auth-input"
+                />
+              </div>
+            </label>
           </div>
 
-          <div className="relative">
-            <Mail className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Email"
-              className="pl-12 py-3"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="form-field">
+              <span className="form-label">Password</span>
+              <div className="form-input-shell">
+                <KeyRound className="form-icon" />
+                <Input
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="At least 8 characters"
+                  className="auth-input"
+                />
+              </div>
+            </label>
+
+            <label className="form-field">
+              <span className="form-label">Confirm Password</span>
+              <div className="form-input-shell">
+                <KeyRound className="form-icon" />
+                <Input
+                  type="password"
+                  name="confirmPassword"
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Repeat your password"
+                  className="auth-input"
+                />
+              </div>
+            </label>
           </div>
 
-          <div className="flex gap-2">
-            <Input
-              placeholder="OTP"
-              className="flex-1 py-3"
-              value={form.otp}
-              onChange={(e) => setForm({ ...form, otp: e.target.value })}
-            />
-            <Button
-              onClick={sendOtp}
-              className="w-[140px] gap-2 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md"
-              disabled={timer > 0}
-            >
-              {timer ? (
-                <>
-                  <RotateCw size={18} className="animate-spin" /> {timer}s
-                </>
-              ) : (
-                <>
-                  <Send size={18} /> OTP
-                </>
-              )}
-            </Button>
-          </div>
+          <div className="rounded-[24px] border border-dashed border-[var(--line-strong)] bg-[var(--surface-2)]/65 p-4">
+            <div className="flex flex-col gap-4 sm:flex-row">
+              <label className="form-field flex-1">
+                <span className="form-label">Verification OTP</span>
+                <div className="form-input-shell">
+                  <Mail className="form-icon" />
+                  <Input
+                    name="otp"
+                    value={form.otp}
+                    onChange={handleChange}
+                    placeholder="Enter 6-digit OTP"
+                    className="auth-input"
+                  />
+                </div>
+              </label>
 
-          <div className="relative">
-            <Phone className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Mobile Number"
-              className="pl-12 py-3"
-              value={form.mobile}
-              onChange={(e) => setForm({ ...form, mobile: e.target.value })}
-            />
-          </div>
-
-          <div className="relative">
-            <Lock className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Password"
-              type={showPass ? "text" : "password"}
-              className="pl-12 pr-12 py-3"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-            />
-            <div
-              className="absolute right-3 top-4 cursor-pointer text-gray-500"
-              onClick={() => setShowPass(!showPass)}
-            >
-              {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
-            </div>
-          </div>
-
-          <div className="relative">
-            <Lock className="absolute left-3 top-4 text-gray-400" size={20} />
-            <Input
-              placeholder="Confirm Password"
-              type={showConfirmPass ? "text" : "password"}
-              className="pl-12 pr-12 py-3"
-              value={form.confirmPassword}
-              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-            />
-            <div
-              className="absolute right-3 top-4 cursor-pointer text-gray-500"
-              onClick={() => setShowConfirmPass(!showConfirmPass)}
-            >
-              {showConfirmPass ? <EyeOff size={20} /> : <Eye size={20} />}
+              <Button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={sendingOtp}
+                className="h-12 rounded-2xl bg-[var(--brand-2)] px-6 text-white shadow-[0_20px_50px_rgba(120,53,15,0.18)] hover:bg-[var(--brand-2)]/92 sm:mt-6"
+              >
+                {sendingOtp ? "Sending..." : otpSent ? "Resend OTP" : "Send OTP"}
+              </Button>
             </div>
           </div>
 
           <Button
-            onClick={handleRegister}
-            className="w-full flex gap-2 justify-center bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 rounded-lg shadow-md"
+            type="submit"
+            disabled={verifying}
+            className="h-12 w-full rounded-2xl bg-[var(--brand-1)] text-base font-semibold text-white shadow-[0_20px_50px_rgba(217,119,6,0.28)] transition hover:bg-[var(--brand-2)]"
           >
-            <UserPlus size={18} />
-            Register
+            {verifying ? "Verifying..." : "Verify and Register"}
+            <ArrowRight className="size-4" />
           </Button>
+        </form>
 
-          <div className="text-center text-sm text-gray-600">
-            Already have an account?{" "}
-            <a href="/login" className="text-blue-600 hover:underline">
-              Login
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        <p className="mt-6 text-sm text-[var(--ink-3)]">
+          Already registered?{" "}
+          <Link to="/login" className="auth-link">
+            Go to login
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }

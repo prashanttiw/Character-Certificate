@@ -112,6 +112,27 @@ describe("Full Character Certificate System Flow", () => {
     expect(res.body.message).toMatch(/Application saved/i);
   });
 
+  it("should fetch dashboard data for the logged-in student", async () => {
+    const res = await request(app)
+      .get("/api/student/dashboard")
+      .set("Authorization", `Bearer ${token}`);
+
+    console.log("RESPONSE (Dashboard):", res.body);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.student.email).toBe(email);
+    expect(res.body.application.status).toBe("Draft");
+  });
+
+  it("should fetch application status", async () => {
+    const res = await request(app)
+      .get("/api/student/status")
+      .set("Authorization", `Bearer ${token}`);
+
+    console.log("RESPONSE (Status):", res.body);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe("Draft");
+  });
+
   it("should not allow excessive OTP requests (rate limiter)", async () => {
     for (let i = 0; i < 5; i++) {
       await request(app).post("/api/auth/register/send-otp").send({

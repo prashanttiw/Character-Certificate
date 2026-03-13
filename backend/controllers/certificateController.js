@@ -68,15 +68,19 @@ const submitCertificateApplication = async (req, res) => {
       return res.status(400).json({ message: "Application already submitted or processed" });
     }
 
-    certificate.status = "Submitted";
+    certificate.status = "Pending";
 
     await certificate.save();
 
     // Send email to student
     const student = await Student.findById(studentId);
-    const emailContent = generateSubmissionEmail(student.name, certificate.rollNo);
+    const emailContent = generateSubmissionEmail(student.name, certificate.rollNo, certificate.updatedAt);
 
-    await sendEmail(student.email, "Certificate Application Submitted", emailContent);
+    await sendEmail({
+      to: student.email,
+      subject: "Certificate Application Submitted",
+      html: emailContent
+    });
 
     res.status(200).json({ message: "Application submitted successfully" });
   } catch (error) {
@@ -100,7 +104,7 @@ const submitApplication = async (req, res) => {
       return res.status(400).json({ message: "Application already submitted or processed" });
     }
 
-    certificate.status = "Submitted";
+    certificate.status = "Pending";
 
     await certificate.save();
 

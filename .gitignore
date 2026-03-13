@@ -1,0 +1,78 @@
+# Environment files
+.env
+.env*.local
+.env.*.local
+!.env.example
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+dist-ssr/
+build/
+**/dist/
+**/dist-ssr/
+**/.vite/
+.vite/
+coverage/
+**/coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lernaDebug.log*
+
+# Local overrides and caches
+*.local
+.cache/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# IDEs
+.idea/
+.sublime-workspace
+.eclipse
+
+# Runtime uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# Accidental workspace artifacts
+frontend/package-lock.json
+backend/package-lock.json
+
+# Node processes
+.env.production.local
+.env.development.local
+.env.test.local
+
+# Yarn
+yarn-error.log
+yarn-debug.log
+
+# pnpm
+.pnpm-debug.log
