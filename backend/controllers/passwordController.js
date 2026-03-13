@@ -8,7 +8,7 @@ const {
   getOtpData,
   verifyOtp,
   clearOtpData,
-  isOtpExpired
+  isOtpExpired,
 } = require("../utils/otpStore");
 
 // 1. Request OTP for Forgot Password
@@ -18,9 +18,12 @@ const sendForgotPasswordOtp = async (req, res) => {
     if (!email) return res.status(400).json({ message: "Email is required" });
 
     const encryptedEmail = encryptField(email);
-const student = await Student.findOne({ email: encryptedEmail });
+    const student = await Student.findOne({ email: encryptedEmail });
 
-    if (!student) return res.status(404).json({ message: "No student found with this email" });
+    if (!student)
+      return res
+        .status(404)
+        .json({ message: "No student found with this email" });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -35,10 +38,11 @@ const student = await Student.findOne({ email: encryptedEmail });
     });
 
     return res.status(200).json({ message: "OTP sent to your email" });
-
   } catch (err) {
     console.error("Error in sendForgotPasswordOtp:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: err.message });
   }
 };
 
@@ -48,12 +52,16 @@ const resetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
     if (!email || !otp || !newPassword) {
-      return res.status(400).json({ message: "Email, OTP, and New Password are required" });
+      return res
+        .status(400)
+        .json({ message: "Email, OTP, and New Password are required" });
     }
 
     if (isOtpExpired(email)) {
       clearOtpData(email);
-      return res.status(410).json({ message: "OTP expired. Please request again." });
+      return res
+        .status(410)
+        .json({ message: "OTP expired. Please request again." });
     }
 
     if (!verifyOtp(email, otp)) {
@@ -61,7 +69,7 @@ const resetPassword = async (req, res) => {
     }
 
     const encryptedEmail = encryptField(email);
-const student = await Student.findOne({ email: encryptedEmail });
+    const student = await Student.findOne({ email: encryptedEmail });
 
     if (!student) return res.status(404).json({ message: "Student not found" });
 
@@ -79,14 +87,15 @@ const student = await Student.findOne({ email: encryptedEmail });
     });
 
     return res.status(200).json({ message: "Password reset successful" });
-
   } catch (err) {
     console.error("Error in resetPassword:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: err.message });
   }
 };
 
 module.exports = {
   sendForgotPasswordOtp,
-  resetPassword
+  resetPassword,
 };
