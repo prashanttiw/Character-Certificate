@@ -1,6 +1,7 @@
 // backend/models/Student.model.js
 
 const mongoose = require('mongoose');
+const Counter = require("./Counter.model");
 const { hashPassword } = require('../utils/hashUtils');
 const { encryptField, decryptField } = require('../utils/encryptionUtils');
 

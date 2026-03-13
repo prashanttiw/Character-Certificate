@@ -29,6 +29,7 @@ router.post(
   authMiddleware,
   upload.fields([
     { name: "aadhar", maxCount: 1 },
+    { name: "aadhaar", maxCount: 1 },
     { name: "marksheet", maxCount: 1 },
   ]),
   applyCertificate
@@ -46,6 +47,7 @@ router.put(
   authMiddleware,
   upload.fields([
     { name: "aadhar", maxCount: 1 },
+    { name: "aadhaar", maxCount: 1 },
     { name: "marksheet", maxCount: 1 },
   ]),
   updateDraftApplication

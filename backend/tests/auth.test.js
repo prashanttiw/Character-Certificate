@@ -16,14 +16,12 @@ beforeAll(async () => {
   await mongoose.connect(uri); // ✅ Fresh clean connection
 });
 
-afterEach(async () => {
+afterAll(async () => {
   const collections = mongoose.connection.collections;
   for (let key in collections) {
     await collections[key].deleteMany({});
   }
-});
 
-afterAll(async () => {
   await mongoose.disconnect();
   await mongo.stop();
 });

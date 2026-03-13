@@ -1,18 +1,24 @@
 // backend/services/redis.service.js
 
 const redis = require('redis');
+const otpStore = require("../utils/otpStore");
 
-// Create a Redis client
-const redisClient = redis.createClient({
-  // If you have a REDIS_URL in your .env file, it will use that.
-  // Otherwise, it defaults to connecting to localhost:6379, which is perfect for local development.
-  url: process.env.REDIS_URL 
-});
+const shouldUseMemoryStore =
+  process.env.NODE_ENV === "test" || !process.env.REDIS_URL;
 
-redisClient.on('error', (err) => console.log('Redis Client Error', err));
+let redisClient = null;
 
-// Connect to Redis
-redisClient.connect();
+if (!shouldUseMemoryStore) {
+  redisClient = redis.createClient({
+    url: process.env.REDIS_URL
+  });
+
+  redisClient.on('error', (err) => console.log('Redis Client Error', err));
+  redisClient.connect().catch((err) => {
+    console.log("Redis connection failed, falling back to in-memory OTP store.", err.message);
+    redisClient = null;
+  });
+}
 
 // We'll set OTPs to expire in 10 minutes (600 seconds)
 const OTP_EXPIRATION_SECONDS = 600;
@@ -25,6 +31,11 @@ const OTP_EXPIRATION_SECONDS = 600;
  * @param {object} data - The user's registration data (name, rollNo, etc.).
  */
 const saveOtpData = async (email, otp, data) => {
+  if (!redisClient) {
+    otpStore.saveOtpData(email, otp, data);
+    return;
+  }
+
   const key = `otp:${email}`;
   const value = JSON.stringify({ otp, data });
   await redisClient.setEx(key, OTP_EXPIRATION_SECONDS, value);
@@ -37,6 +48,16 @@ const saveOtpData = async (email, otp, data) => {
  * @returns {object|null} The stored user data if the OTP is valid, otherwise null.
  */
 const verifyOtpAndGetData = async (email, enteredOtp) => {
+  if (!redisClient) {
+    if (otpStore.isOtpExpired(email) || !otpStore.verifyOtp(email, enteredOtp)) {
+      return null;
+    }
+
+    const record = otpStore.getOtpData(email);
+    otpStore.clearOtpData(email);
+    return record?.data || null;
+  }
+
   const key = `otp:${email}`;
   const result = await redisClient.get(key);
 

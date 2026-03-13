@@ -1,7 +1,10 @@
-
 const express = require('express');
 const path = require("path");
 const cors = require('cors');
+require("dotenv").config();
+
+process.env.JWT_SECRET ||= "test-jwt-secret";
+process.env.SECRET_KEY ||= "test-secret-key";
 
 const app = express(); // create express app
 
@@ -21,10 +24,11 @@ app.use((req, res, next) => {
 
 // --- Route Definitions ---
 const authRoutes = require('./routes/auth.routes');
+const passwordRoutes = require("./routes/passwordRoutes");
+const studentRoutes = require('./routes/studentRoutes');
 app.use('/api/auth', authRoutes);
-
-// const studentRoutes = require('./routes/studentRoutes');
-// app.use('/api/student', studentRoutes);
+app.use("/api/auth", passwordRoutes);
+app.use('/api/student', studentRoutes);
 
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

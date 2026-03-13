@@ -7,6 +7,11 @@ const generateSubmissionEmail = require("../utils/emailTemplates");
 const applyCertificate = async (req, res) => {
   try {
     const studentId = req.user.id;
+    const student = await Student.findById(studentId);
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
 
     const {
       name,
@@ -22,16 +27,16 @@ const applyCertificate = async (req, res) => {
 
     const certificate = new Certificate({
       student: studentId,
-      name,
-      rollNo,
+      name: name || student.name,
+      rollNo: rollNo || student.rollNo,
       gender,
-      maritalStatus,
+      maritalStatus: maritalStatus === "Single" ? "Unmarried" : maritalStatus,
       careOf,
       course,
       school,
       department,
       academicSession,
-      aadharUrl: req.files?.aadhar?.[0]?.path || "",
+      aadharUrl: req.files?.aadhar?.[0]?.path || req.files?.aadhaar?.[0]?.path || "",
       marksheetUrl: req.files?.marksheet?.[0]?.path || "",
       status: "Draft",
     });

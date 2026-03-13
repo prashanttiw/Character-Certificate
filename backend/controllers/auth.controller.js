@@ -6,8 +6,19 @@ const sendEmail = require("../utils/sendEmail");
 const loginAlertTemplate = require("../utils/emailTemplates/loginAlertTemplate");
 const registrationOtpTemplate = require("../utils/emailTemplates/registrationOtpTemplate"); // Added this missing import
 const { comparePassword } = require("../utils/hashUtils");
-const { decryptField } = require("../utils/encryptionUtils");
+const { encryptField } = require("../utils/encryptionUtils");
 const { saveOtpData, verifyOtpAndGetData } = require('../services/redis.service');
+
+const findStudentByEmail = async (email) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const rawStudent = await Student.collection.findOne({
+    email: encryptField(normalizedEmail)
+  });
+
+  return rawStudent ? Student.hydrate(rawStudent) : null;
+};
 
 /**
  * @description   Step 1: Get user details and send OTP for registration
@@ -19,7 +30,9 @@ const startRegistration = async (req, res) => {
     const { name, email, rollNo, mobile, password } = req.body;
 
     // Check if a student with this email or roll number already exists in the database
-    const existingStudent = await Student.findOne({ $or: [{ email }, { rollNo }] });
+    const existingStudent =
+      (await Student.findOne({ rollNo: rollNo?.trim().toUpperCase() })) ||
+      (await findStudentByEmail(email));
     if (existingStudent) {
       return res.status(409).json({ message: "A user with this email or roll number already exists." });
     }
@@ -88,12 +101,10 @@ const login = async (req, res) => {
   try {
     const { emailOrRollNo, password } = req.body;
 
-    const student = await Student.findOne({
-      $or: [
-        { rollNo: emailOrRollNo.toUpperCase() },
-        { email: emailOrRollNo.toLowerCase() }
-      ]
-    });
+    const normalizedInput = emailOrRollNo?.trim() || "";
+    const student = normalizedInput.includes("@")
+      ? await findStudentByEmail(normalizedInput)
+      : await Student.findOne({ rollNo: normalizedInput.toUpperCase() });
 
     if (!student || !(await comparePassword(password, student.password))) {
       return res.status(401).json({ message: "Invalid credentials. Please check your email/roll number and password." });

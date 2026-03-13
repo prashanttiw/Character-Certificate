@@ -2,14 +2,24 @@ const Student = require("../models/Student");
 const sendEmail = require("../utils/sendEmail");
 const generateResetOTPTemplate = require("../utils/emailTemplates/resetOtpTemplate");
 const passwordChangedTemplate = require("../utils/emailTemplates/passwordChangedTemplate");
-const { hashPassword } = require("../utils/hashUtils");
+const { encryptField } = require("../utils/encryptionUtils");
 const {
   saveOtpData,
-  getOtpData,
   verifyOtp,
   clearOtpData,
   isOtpExpired,
 } = require("../utils/otpStore");
+
+const findStudentByEmail = async (email) => {
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const rawStudent = await Student.collection.findOne({
+    email: encryptField(normalizedEmail)
+  });
+
+  return rawStudent ? Student.hydrate(rawStudent) : null;
+};
 
 // 1. Request OTP for Forgot Password
 const sendForgotPasswordOtp = async (req, res) => {
@@ -17,8 +27,7 @@ const sendForgotPasswordOtp = async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: "Email is required" });
 
-    const encryptedEmail = encryptField(email);
-    const student = await Student.findOne({ email: encryptedEmail });
+    const student = await findStudentByEmail(email);
 
     if (!student)
       return res
@@ -68,13 +77,11 @@ const resetPassword = async (req, res) => {
       return res.status(401).json({ message: "Invalid OTP. Try again." });
     }
 
-    const encryptedEmail = encryptField(email);
-    const student = await Student.findOne({ email: encryptedEmail });
+    const student = await findStudentByEmail(email);
 
     if (!student) return res.status(404).json({ message: "Student not found" });
 
-    const hashedPassword = await hashPassword(newPassword);
-    student.password = hashedPassword;
+    student.password = newPassword;
     await student.save();
 
     clearOtpData(email);
