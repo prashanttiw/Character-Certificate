@@ -2,6 +2,7 @@ const Certificate = require("../models/certificate");
 const Student = require("../models/Student");
 const sendEmail = require("../utils/sendEmail");
 const generateSubmissionEmail = require("../utils/emailTemplates");
+const { createActivityLog } = require("../services/activityLog.service");
 
 // ========== Apply for Certificate (Initial Save with Files) ==========
 const applyCertificate = async (req, res) => {
@@ -43,6 +44,21 @@ const applyCertificate = async (req, res) => {
 
     await certificate.save();
 
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "certificate.application.draft_created",
+      entityType: "certificate",
+      entityId: certificate._id,
+      details: {
+        status: certificate.status,
+        course: certificate.course,
+        academicSession: certificate.academicSession,
+      },
+      req,
+    });
+
     res.status(201).json({
       message: "Application saved as draft successfully",
       certificate,
@@ -82,6 +98,35 @@ const submitCertificateApplication = async (req, res) => {
       html: emailContent
     });
 
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "certificate.application.submitted",
+      entityType: "certificate",
+      entityId: certificate._id,
+      details: {
+        status: certificate.status,
+      },
+      req,
+    });
+
+    await createActivityLog({
+      actorType: "system",
+      actorId: null,
+      actorLabel: null,
+      action: "certificate.review.received",
+      entityType: "certificate",
+      entityId: certificate._id,
+      status: "info",
+      details: {
+        studentId: student.studentId,
+        rollNo: student.rollNo,
+        queueStatus: certificate.status,
+      },
+      req,
+    });
+
     res.status(200).json({ message: "Application submitted successfully" });
   } catch (error) {
     console.error("Error submitting application:", error.message);
@@ -108,6 +153,39 @@ const submitApplication = async (req, res) => {
 
     await certificate.save();
 
+    const student = await Student.findById(studentId);
+
+    if (student) {
+      await createActivityLog({
+        actorType: "student",
+        actorId: student._id,
+        actorLabel: student.rollNo,
+        action: "certificate.application.submitted",
+        entityType: "certificate",
+        entityId: certificate._id,
+        details: {
+          status: certificate.status,
+          via: "legacy-submit-route",
+        },
+        req,
+      });
+
+      await createActivityLog({
+        actorType: "system",
+        action: "certificate.review.received",
+        entityType: "certificate",
+        entityId: certificate._id,
+        status: "info",
+        details: {
+          studentId: student.studentId,
+          rollNo: student.rollNo,
+          queueStatus: certificate.status,
+          via: "legacy-submit-route",
+        },
+        req,
+      });
+    }
+
     res.status(200).json({ message: "Application submitted successfully" });
   } catch (error) {
     console.error("Error submitting application:", error.message);
@@ -123,8 +201,34 @@ const getApplicationStatus = async (req, res) => {
     const certificate = await Certificate.findOne({ student: studentId });
 
     if (!certificate) {
+      await createActivityLog({
+        actorType: "student",
+        actorId: studentId,
+        action: "certificate.application.status_checked",
+        entityType: "certificate",
+        entityId: null,
+        status: "info",
+        details: {
+          currentStatus: "No application",
+        },
+        req,
+      });
+
       return res.status(200).json({ status: "No application" });
     }
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: studentId,
+      action: "certificate.application.status_checked",
+      entityType: "certificate",
+      entityId: certificate._id,
+      status: "info",
+      details: {
+        currentStatus: certificate.status,
+      },
+      req,
+    });
 
     res.status(200).json({
       status: certificate.status,
@@ -144,6 +248,7 @@ const saveAsDraft = async (req, res) => {
     const studentId = req.user.id;
 
     let certificate = await Certificate.findOne({ student: studentId });
+    const isNewDraft = !certificate;
 
     if (!certificate) {
       certificate = new Certificate({
@@ -183,6 +288,25 @@ const saveAsDraft = async (req, res) => {
     }
 
     await certificate.save();
+
+    const student = await Student.findById(studentId);
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: studentId,
+      actorLabel: student?.rollNo || null,
+      action: isNewDraft
+        ? "certificate.application.draft_created"
+        : "certificate.application.draft_saved",
+      entityType: "certificate",
+      entityId: certificate._id,
+      details: {
+        status: certificate.status,
+        course: certificate.course || null,
+        academicSession: certificate.academicSession || null,
+      },
+      req,
+    });
 
     res.status(200).json({
       message: "Draft saved successfully",
@@ -236,6 +360,23 @@ const updateDraftApplication = async (req, res) => {
     }
 
     await application.save();
+
+    const student = await Student.findById(studentId);
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: studentId,
+      actorLabel: student?.rollNo || null,
+      action: "certificate.application.draft_updated",
+      entityType: "certificate",
+      entityId: application._id,
+      details: {
+        status: application.status,
+        course: application.course || null,
+        academicSession: application.academicSession || null,
+      },
+      req,
+    });
 
     res.status(200).json({
       message: "Draft updated successfully",

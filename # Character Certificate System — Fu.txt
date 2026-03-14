@@ -1,470 +1,1162 @@
-# Character Certificate System — Full Technical Specification & Future Roadmap
-
-**Prepared for:** Caption
+# Character Certificate System - Development Status Document
 
-**Executive summary (TL;DR)**
-This document is a comprehensive, delivery-ready technical specification for the **Character Certificate System** you have been building. It covers scope, architecture, detailed flows (registration, OTP, file upload, draft & submission, admin review, certificate generation, public verification), data models, API contracts, security considerations (including encryption currently in use), testing, deployment, monitoring, and a prioritized roadmap for future capabilities (payments, PKI signatures, blockchain anchoring, multi-tenancy, analytics, mobile app). If you intend to hand this brief to another model (Gemini Pro), engineer, or a product manager, it contains the information and artifacts necessary to continue development or to fully outsource implementation.
+Last updated: March 14, 2026
+Project root: Character-Certificate
+Purpose: record the real development completed so far, align the document with the current codebase, and prepare a clean base for future planning.
 
----
+------------------------------------------------------------
+1. Project Summary
+------------------------------------------------------------
 
-## 1. Objectives & scope
+The project currently has a working student-facing web application connected to a live Node.js + Express + MongoDB backend.
 
-**Primary objective:** Build a secure, auditable, production-grade web system for students to request, track, and obtain institution-signed character certificates.
+The strongest completed areas right now are:
 
-**MVP scope (already implemented or high priority):**
+- OTP-based student registration
+- Student login with JWT
+- Forgot-password flow with OTP
+- Student dashboard connected to backend data
+- Certificate application draft creation with file uploads
+- Draft update flow
+- Final submission of the latest draft for review
+- Basic integration tests for the main student flow
 
-* Student registration (OTP-based two-step flow)
-* Login using email or roll no. (password + optional OTP)
-* Draftable certificate application with file uploads (Aadhar, marksheet)
-* Submit application and track status in student dashboard
-* Admin panel for review, approve/reject/hold with comments
-* Certificate auto-generation (PDF) and delivery via email
-* Public verification page for certificates
-* AES-256-CBC encryption of sensitive fields (email/mobile) per current implementation
-* Tests with Jest + MongoMemoryServer
+The project is not yet complete as a full institution-ready certificate platform. Important features such as admin review panel, approval/rejection workflow UI, public certificate verification, PDF generation, and final certificate issuing are still not fully implemented in the active runtime path.
 
-**Out-of-scope for MVP:** payment integration (deferred), cryptographic PKI-based signatures (future), blockchain anchoring (future), mobile-native app (future)
+This means the system is best described as:
 
----
+"A working student portal and backend foundation for a character certificate system, with core onboarding and application submission implemented, and administrative issuance workflows still pending."
 
-## 2. Stakeholders & roles
+------------------------------------------------------------
+2. Development Completed So Far
+------------------------------------------------------------
 
-* **Student (applicant)** — registers, uploads docs, saves draft, submits, downloads certificate when ready.
-* **Admin / Super Admin** — reviews applications, approves/rejects/holds, access logs, manage payments, view history.
-* **System / Ops** — monitors, deploys, backups, rotates keys.
-* **Third parties** — email provider (SMTP), payment gateway (future), S3 or object storage provider (optional).
+Based on the current repository and git history, the development completed till now includes the following major work.
 
----
+2.1 Backend foundation
 
-## 3. High-level architecture (textual)
+- Express backend created with separated `app.js` and `server.js`
+- MongoDB connection layer added in `backend/config/db.js`
+- Environment variable support added through `dotenv`
+- API structure organized into controllers, routes, middleware, models, services, and utils
+- Basic test-friendly app export pattern implemented
 
-1. **Frontend**: React + Vite + Tailwind + ShadCN UI. SPA with pages for registration/login, student dashboard, apply form (with file upload), admin panel, and public verification.
-2. **Backend**: Node.js + Express. Modular controllers (auth, certificate, student, profileEdit, password) and middleware (auth, rateLimiter, file upload). Uses JWT for auth.
-3. **Database**: MongoDB (document DB). Collections: Students, Certificates, Admins, ActivityLogs, (optional) Payments.
-4. **File storage**: local `/uploads` folder for MVP, recommend S3-compatible object storage in production.
-5. **Email**: SMTP (transporter implemented in `utils/sendEmail.js`) with reusable templates in `utils/emailTemplates`.
-6. **PDF generation**: HTML-to-PDF renderer (Puppeteer/Playwright) or `pdf-lib` depending on templating needs.
-7. **Optional**: Redis for OTP/session store, rate limiting counters, and cache.
+This separation is important because it allows the backend app to be imported directly in tests without starting a full server.
 
----
+2.2 Student authentication system
 
-## 4. Tech stack recommendations
+Implemented files:
 
-* Frontend: React + Vite, Tailwind CSS, shadcn/ui
-* Backend: Node.js 18+, Express 4+, Mongoose
-* DB: MongoDB (Atlas for production)
-* File store: AWS S3 / DigitalOcean Spaces (production) — local `/uploads` only for dev/testing
-* Auth & session: JWT + refresh tokens, httpOnly cookies for session tokens (optional)
-* Email: Nodemailer with SMTP (or transactional provider like SendGrid/Postmark)
-* PDF generation: Puppeteer + HTML templates (for pixel-perfect certificates)
-* Encryption: AES-256-CBC (note: implementation details below)
-* Tests: Jest, Supertest, MongoMemoryServer
-* CI/CD: GitHub Actions -> Docker image -> Deploy to VPS / Kubernetes
-* Monitoring: Sentry (errors), Prometheus / Grafana (metrics), ELK stack / Papertrail (logs)
+- `backend/controllers/auth.controller.js`
+- `backend/routes/auth.routes.js`
+- `backend/models/Student.model.js`
+- `backend/models/Counter.model.js`
+- `backend/utils/hashUtils.js`
+- `backend/utils/encryptionUtils.js`
+- `backend/services/redis.service.js`
+- `backend/middleware/rateLimiter.js`
 
----
+Completed behavior:
 
-## 5. Data models (core fields)
+- Student registration is a 2-step OTP flow
+- `POST /api/auth/register/start` and `POST /api/auth/register/send-otp` send OTPs
+- `POST /api/auth/register/verify` and `POST /api/auth/register/verify-otp` verify OTP and create student account
+- Duplicate checks exist for roll number and encrypted email
+- Password hashing is handled before student save
+- Student IDs are auto-generated in format like `GBU-<year>-<sequence>`
+- Login accepts either email or roll number
+- Successful login returns JWT token and basic student profile
+- Login alert email logic has been added
+- OTP endpoints are protected by express rate limiting
 
-### Student
+2.3 Forgot password flow
 
-* `_id` (ObjectId)
-* `studentId` (string, auto-generated) — human-friendly
-* `name` (string)
-* `rollNo` (string)
-* `email` (encrypted string) — AES-256 encrypted using `encryptField` utility
-* `mobile` (encrypted string)
-* `passwordHash` (string, bcrypt)
-* `verified` (boolean)
-* `createdAt`, `updatedAt`
-* `profileHistory` (array of changes)
+Implemented files:
 
-### Certificate / Application
+- `backend/controllers/passwordController.js`
+- `backend/routes/passwordRoutes.js`
+- `backend/utils/otpStore.js`
+- `backend/utils/emailTemplates/resetOtpTemplate.js`
+- `backend/utils/emailTemplates/passwordChangedTemplate.js`
 
-* `_id` (ObjectId)
-* `certificateId` (string, unique, format UID, e.g. `CC-YYYY-XXXX`)
-* `studentRef` (ObjectId)
-* `applicantName` (string)
-* `rollNo` (string)
-* `gender`, `maritalStatus`, `careOf`, `course`, `department`, `academicSession`
-* `uploads`:
+Completed behavior:
 
-  * `aadhar` { filename, url, hash }
-  * `marksheet` { filename, url, hash }
-* `status` (enum: `Draft`, `AwaitingPayment`, `Submitted`, `Pending`, `Completed`, `Rejected`, `OnHold`)
-* `adminComments` (array of { adminId, comment, timestamp })
-* `certificatePDF` { url, generatedAt }
-* `issuedDate` (date)
-* `digitalSignature` (image reference or signature metadata)
-* `createdAt`, `updatedAt`
+- Student can request forgot-password OTP by email
+- Student can verify OTP and set a new password
+- Password change confirmation email is sent
+- OTP expiry is handled in memory
 
-### Admin
+Important implementation note:
 
-* `_id`, `email`, `role` (`admin`/`superadmin`), `passwordHash`, `lastLogin`
+- Registration OTP currently goes through `redis.service.js` with in-memory fallback
+- Forgot-password OTP still directly uses `otpStore.js` in memory
 
-### ActivityLog
+So the OTP strategy is partially improved, but not yet fully unified.
 
-* `actorType` (student/admin/system), `actorId`, `action`, `meta`, `timestamp`
+2.4 Student dashboard and certificate application flow
 
----
+Implemented files:
 
-## 6. API surface & sample contracts
+- `backend/controllers/studentController.js`
+- `backend/controllers/certificateController.js`
+- `backend/routes/studentRoutes.js`
+- `backend/models/certificate.js`
+- `backend/middleware/authMiddleware.js`
+- `backend/middleware/uploadMiddleware.js`
+
+Completed behavior:
 
-> **Note:** All endpoints should validate inputs, rate-limit key actions (OTP, login, verification), and return consistent error formats.
+- Authenticated student can open dashboard
+- Dashboard returns student profile data and latest application
+- Student can create a certificate application with uploaded Aadhaar/Aadhaar and marksheet files
+- Application is initially saved in `Draft` status
+- Student can edit an existing draft
+- Student can submit the latest draft
+- Submission changes status from `Draft` to `Pending`
+- Submission email is triggered
+- Student can fetch current application status
+
+Supported student routes currently active in runtime:
+
+- `GET /api/student/dashboard`
+- `POST /api/student/apply`
+- `PUT /api/student/edit`
+- `POST /api/student/submit`
+- `POST /api/student/submit-latest`
+- `GET /api/student/status`
+
+2.5 File upload support
 
-### Auth & registration
+Completed behavior:
+
+- Multer-based upload handling implemented
+- Allowed file types: JPG, PNG, PDF
+- File size limit: 5 MB
+- Uploaded files are stored locally
+- `backend/uploads/.gitkeep` is used so the folder remains in git
+
+This is enough for development, testing, and local demos.
+
+2.6 Email system
+
+Implemented files:
+
+- `backend/utils/sendEmail.js`
+- reusable templates under `backend/utils/emailTemplates/`
+
+Completed behavior:
+
+- Registration OTP email
+- Forgot-password OTP email
+- Password changed email
+- Login alert email
+- Profile update related templates already created
 
-* `POST /api/auth/register/start` — body: `{ name, rollNo, email, mobile }` → sends registration OTP, does not create user yet.
-* `POST /api/auth/register/verify` — body: `{ emailOrMobile, otp }` → on success creates user, returns JWT.
-* `POST /api/auth/login` — body: `{ identifier (email|rollNo), password }` → returns JWT + refresh token.
-* `POST /api/auth/send-otp` — reusable OTP endpoint for forgot-password or sensitive updates.
-* `POST /api/auth/forgot-password/start` & `/verify` — two-step with OTP.
+Current email behavior:
 
-**Sample success response**:
+- In test mode, sending is skipped
+- If email credentials are missing, sending is skipped with a warning
+- Gmail transporter is used right now
 
-```json
-{ "ok": true, "message": "OTP sent", "next": "verify" }
-```
+2.7 Frontend student portal
 
-### Certificate application
+The frontend has been significantly upgraded and is now connected to backend APIs instead of being just placeholder screens.
 
-* `POST /api/certificates` — multipart form. Create or save draft (status `Draft`). Returns saved application id.
-* `PUT /api/certificates/:id/submit` — marks `status=Submitted`. Triggers admin notification.
-* `GET /api/student/dashboard` — returns latest application(s) and statuses for the logged-in student.
-* `GET /api/certificates/:id` — get application + certificate metadata (only PDF URL if `Completed`).
+Important frontend files:
 
-### Admin
+- `frontend/student-dashboard/src/App.jsx`
+- `frontend/student-dashboard/src/contexts/AuthContext.jsx`
+- `frontend/student-dashboard/src/components/ProtectedRoute.jsx`
+- `frontend/student-dashboard/src/layouts/AuthLayout.jsx`
+- `frontend/student-dashboard/src/layouts/MainLayout.jsx`
+- `frontend/student-dashboard/src/pages/Register.jsx`
+- `frontend/student-dashboard/src/pages/Login.jsx`
+- `frontend/student-dashboard/src/pages/ForgotPassword.jsx`
+- `frontend/student-dashboard/src/pages/Dashboard.jsx`
+- `frontend/student-dashboard/src/services/auth.js`
+- `frontend/student-dashboard/src/services/certificate.js`
 
-* `GET /api/admin/certificates` — list + filters (status, date, student)
-* `POST /api/admin/certificates/:id/approve` — body: `{ comment? }` → generate PDF, set `Completed`, attach `certificateId`, send email.
-* `POST /api/admin/certificates/:id/reject` — body: `{ comment }` → set `Rejected`, notify student.
-* `POST /api/admin/certificates/:id/hold` — body: `{ comment, reason }` → set `OnHold`.
+Completed frontend behavior:
 
-### Public verification
+- React + Vite app is set up
+- Student authentication state is stored through context
+- Protected route is implemented
+- Registration page supports OTP send + OTP verify flow
+- Login page works with backend login API
+- Forgot-password page works with backend OTP reset flow
+- Dashboard loads live student data from backend
+- Dashboard allows file upload and application draft save
+- Dashboard allows draft update
+- Dashboard allows final submission for review
+- Logout flow is implemented
+- Toast notifications and polished UI states are present
+
+Frontend design work completed:
+
+- Dedicated auth layout
+- Dedicated dashboard layout
+- Modern visual styling in `src/index.css`
+- Student-friendly dashboard cards, status badges, hero stats, and upload sections
+
+2.8 Tests and quality work
+
+Implemented file:
 
-* `GET /api/verify?certificateId=CC-2025-0001` — returns `{ valid: true, name: "X", rollNo: "Y", issuedDate: "..." }` or `{ valid: false }`.
+- `backend/tests/auth.test.js`
+
+The current integration test suite covers:
+
+- registration OTP send
+- OTP verification and student creation
+- login and JWT issue
+- forgot-password OTP send
+- password reset
+- login with updated password
+- certificate application create
+- dashboard fetch
+- application status fetch
+- OTP rate limiting
+- invalid JWT protection
+
+This is a strong foundation for the student-side MVP.
+
+------------------------------------------------------------
+3. Git Milestones So Far
+------------------------------------------------------------
+
+Recent git history gives a useful picture of development progress:
+
+- `e56d18a` Initial commit
+- `224da03` First day v0.1.1
+- `804cb49` Second Day v0.1.2
+- `eed2a34` Third Day v0.1.3
+- `c514b23` fourth Day v0.1.4
+- `27a2abc` fifth Day v0.1.5
+- `a3b2ea7` Sixth day v0.1.6 (restart of project)
+- `78cd47d` restart the project. make some changes there will be detailed document from next push
+- `d6498d4` fix: stabilize backend auth flow and integration tests
+- `8d45bf3` feat: integrate live student portal frontend with backend workflows
+
+The latest major completed milestone is:
+
+"Live student portal frontend integrated with backend workflows."
+
+That is the current state of the project as of March 14, 2026.
 
----
+------------------------------------------------------------
+4. Current Architecture in Code
+------------------------------------------------------------
 
-## 7. File uploads & handling
+4.1 Backend runtime path actually mounted in `backend/app.js`
 
-**Current:** implementation uses `uploadMiddleware` and stores files in `/uploads`.
+Currently active route groups:
 
-**Production recommendations:**
+- `/api/auth`
+- `/api/student`
 
-* Use S3 or S3-compatible object storage, with strict bucket policies and versioning.
-* Store file metadata in DB; keep original filename, content-type, size, checksum (SHA-256) to detect duplicates.- Validate file types (PDF/PNG/JPG only) and limit size (e.g., 5–10 MB).
-* Scan files for malware / sanitize images (virus-scan/clamAV in pipeline) if possible.
-* Use pre-signed URLs for direct client-to-S3 uploads to avoid overloading backend.
+Currently present in codebase but commented out in `app.js`:
 
----
+- profile edit routes
+- certificate routes as a separate route group
+- uploads static serving
 
-## 8. Certificate generation & digital signature
+This tells us the project contains extra work in the repository, but the active runtime is intentionally focused on auth + student flow.
 
-**Approach**:
+4.2 Models currently used
 
-* Keep a HTML/CSS certificate template so the certificate is deterministic and brand-consistent.
-* Use Puppeteer to render the HTML to a print-ready PDF (supports fonts, exact layout, images).
-* Embed unique `certificateId`, `issuedDate`, authority signature image, and a QR code linking to verification page.
+Student model:
 
-**Digital / cryptographic signature options (prioritized):**
+- name
+- rollNo
+- email
+- mobile
+- password
+- studentId
+- isVerified
+- timestamps
 
-1. **MVP**: Visual signature image + seal (simple and widely accepted, but not cryptographically verifiable).
-2. **Improved**: Sign the certificate PDF byte hash using a private key (RSA/ECDSA). Store signature metadata in DB and publish public key for verification.
-3. **Advanced**: Anchor a certificate hash on a blockchain (e.g., Ethereum or a low-cost anchor) plus a revocation list for revoked certificates.
+Certificate model:
 
-**Recommendation**: Implement option 1 initially for deliverability, then incrementally add option 2 for tamper-evidence.
+- student
+- name
+- rollNo
+- gender
+- maritalStatus
+- careOf
+- course
+- school
+- department
+- academicSession
+- aadharUrl
+- marksheetUrl
+- certificateNumber
+- status
+- comments
+- timestamps
 
----
+Counter model:
 
-## 9. Verification flow
+- used to generate sequential student IDs
 
-1. Public page accepts `certificateId` (or scans QR).
-2. Back-end finds the certificate and returns minimal verified attributes (name, rollNo, issuedDate, issuer).
-3. Optionally, verify cryptographic signature (if implemented) and display verification status.
+4.3 Security-related implementation currently present
 
-Security: avoid returning PII beyond what’s needed; rate-limit requests; log verification attempts.
+- JWT auth middleware for protected routes
+- bcrypt password hashing
+- express-rate-limit for OTP routes
+- file type and size filtering
+- encrypted email/mobile storage in student model
 
----
+------------------------------------------------------------
+5. What Is Working Right Now
+------------------------------------------------------------
 
-## 10. OTP & sensitive update flows
+If the backend server and frontend app are started with proper environment setup, the following end-to-end student flow is supported right now:
 
-**Current design:** two-step flows for registration and forgot password. OTPs are not persisted in DB (in-memory or transient store).
+1. Student opens registration page
+2. Student fills name, roll number, email, mobile, and password
+3. System sends OTP to email
+4. Student verifies OTP and account is created
+5. Student logs in with email or roll number
+6. JWT token is stored in frontend local storage
+7. Student opens dashboard
+8. Dashboard loads student profile and latest application
+9. Student fills certificate form and uploads files
+10. Student saves draft
+11. Student reopens dashboard and updates draft if needed
+12. Student submits the draft for review
+13. Application status becomes `Pending`
 
-**Recommendations:**
+Also working:
 
-* Move from in-memory to Redis for distributed systems and reliability.
-* Store OTP hashed (e.g., HMAC) with TTL. Compare hashed version on verification.
-* Limit OTP send attempts per phone/email per time window. Block suspicious activity.
-* Log OTP attempts in ActivityLog.
+- forgot password by OTP
+- rate-limit protection on OTP endpoints
+- protected dashboard access
 
----
+------------------------------------------------------------
+6. Work Present But Not Fully Active or Not Finished
+------------------------------------------------------------
 
-## 11. Authentication & session management
+The repository contains some development that is partial, legacy, or not currently wired into the main runtime.
 
-* Passwords: bcrypt with appropriate salt rounds.
-* JWT: sign with `process.env.JWT_SECRET`, include short-lived access token (e.g., 15m) + refresh token stored with rotation.
-* Logout/invalidate tokens: maintain token blacklist or use rotating refresh tokens persisted in DB.
-* Multi-factor: keep OTP-based login optional, especially for sensitive actions (profile change before certificate issuance).
+6.1 Separate certificate route module exists
 
----
+File:
 
-## 12. Encryption notes (important, candid)
+- `backend/routes/certificateRoutes.js`
 
-**Current implementation (per project context):** `encryptField` and `decryptField` utilities perform AES-256-CBC encryption derived from `process.env.SECRET_KEY` and use a fixed IV. All DB queries for encrypted fields use `encryptField` before querying.
+Status:
 
-**Reality check (tell it like it is):** Using a *fixed IV* with AES-CBC is insecure because the same plaintext will produce identical ciphertexts across records and leaks patterns. It also makes deterministic queries possible but weakens confidentiality and is vulnerable to certain ciphertext manipulation attacks.
+- Exists
+- Contains save-draft, update-draft, apply, submit, submit-final, status routes
+- Not mounted in the current `backend/app.js`
 
-**Actionable, non-sugarcoated recommendations:**
+Meaning:
 
-1. **Switch to random IV per encryption**: generate a secure random IV and store it concatenated with the ciphertext (e.g., base64(iv) + ":" + base64(ciphertext)). On decrypt, extract IV and decrypt.
-2. **Use authenticated encryption**: prefer AES-256-GCM which provides integrity (auth tag). If you must use CBC, add HMAC for integrity.
-3. **Indexing of encrypted fields**: If you need to query by email/mobile, maintain an additional deterministic index column by storing a keyed HMAC (e.g., HMAC-SHA256 using a separate KEY) that can be indexed — **do not** use raw ciphertext for DB queries.
-4. **Key rotation**: implement key rotation strategy and key versioning metadata with each record.
+- This is either legacy routing or a future route split not yet reconnected
 
-Implementing these three changes will move your project from brittle to production-appropriate.
+6.2 Profile edit module exists
 
----
+Files:
 
-## 13. Admin panel & UX considerations
+- `backend/routes/profileEditRoutes.js`
+- `backend/controllers/profileEditController.js`
+- multiple profile-related email templates
 
-**Key capabilities:**
+Status:
 
-* Dashboard metrics (pending, completed, drafts)
-* Application search and filters (rollNo, name, date range, status)
-* Approve/Reject/Hold workflows with comment modal
-* Activity timeline per student
-* Export CSV / batch actions
-* Payment viewing (future)
+- Files exist
+- Not mounted in active runtime
 
-**UI considerations**:
+Meaning:
 
-* Keep actions reversible only when appropriate; require re-approval if changes occur after approval.
-* Show clear, immutable `certificateId` once issued.
+- Profile editing capability has been explored or partially built, but it is not part of the current main product flow yet
 
----
+6.3 Certificate issuance lifecycle is incomplete
 
-## 14. Status state machine (student & admin view)
+What exists:
 
-**Statuses**: `NoApplication` -> `Draft` -> `AwaitingPayment` -> `Submitted` -> `Pending` -> `Completed` / `Rejected` / `OnHold`
+- certificate model includes `certificateNumber`
+- application status handling exists
+- email flow for submission exists
 
-**Allowed transitions (examples)**:
+What is missing in active system:
 
-* Draft -> AwaitingPayment or Draft -> Submitted
-* Submitted -> Pending (system) -> Completed
-* Pending -> OnHold / Rejected / Completed
-* Completed -> (immutable) — only revocation allowed via Admin -> Revoked
+- admin login/admin panel
+- approve/reject/hold workflow in active routes
+- certificate PDF generation
+- certificate number generation on approval
+- public certificate verification page/API
+- downloadable final certificate experience
 
-**UI**: Display an ordered progress bar with timestamps for each transition for audit.
+6.4 Frontend route file exists but is empty
 
----
+File:
 
-## 15. Testing & quality assurance
+- `frontend/student-dashboard/src/routes/AppRoutes.jsx`
 
-* Unit tests (Jest) for utilities (encryption, OTP handling, validators)
-* Integration tests (Supertest + MongoMemoryServer) for routes
-* End-to-end tests (Playwright) for critical flows: register, apply, admin approve, download certificate
-* Security tests: pen-testing of file upload endpoints and auth flows
-* CI: run lint, tests, build on Pull Request, require green checks to merge
+Status:
 
----
+- Present in repository
+- currently empty / unused
 
-## 16. Observability & logging
+Meaning:
 
-* Use structured JSON logs (winston) and forward logs to a central system.
-* Track metrics: request latency, error rates, OTP sends, certs issued.
-* Instrument health endpoints (`/health`) and readiness checks.
-* Use Sentry for stack traces and Prometheus for metrics.
+- routing responsibility was moved into `src/App.jsx`
 
----
+------------------------------------------------------------
+7. Known Issues, Risks, and Technical Debt
+------------------------------------------------------------
 
-## 17. CI/CD & deployment
+This section is important because future planning should be based on the real gaps.
 
-* CI pipeline: lint → unit tests → build → docker image build → push to registry.
-* CD: deploy using Docker Compose for small infra, or Kubernetes for scale. Use blue/green or rolling updates.
-* Environment management: use secrets manager (AWS Secrets Manager / HashiCorp Vault) to store keys.
-* Backups: schedule MongoDB snapshots, and object storage replication.
+7.1 Encryption design needs improvement
 
----
+Current implementation in `backend/utils/encryptionUtils.js` uses:
 
-## 18. Security & compliance checklist
+- AES-256-CBC
+- derived key from `SECRET_KEY`
+- fixed IV of all zeros
 
-* HTTPS everywhere
-* CSP + Helmet middleware
-* Rate limiting (especially OTP, login)
-* Validate & sanitize all user inputs
-* File type/size validation + virus scanning
-* Secure storage of secrets (no `.env` in repo)
-* Rotate keys and maintain key version metadata
-* Implement RBAC for admin actions
-* Email deliverability: configure SPF/DKIM/DMARC to avoid spam
-* Data retention policy and privacy compliance (GDPR/India data laws) if applicable
+This is not production-grade encryption for sensitive user data.
 
----
+Current effect:
 
-## 19. Scalability & performance
+- same plaintext gives same ciphertext
+- pattern leakage is possible
+- deterministic lookup works, but security is weaker than it should be
 
-* Offload static assets and PDFs to CDN
-* Use S3 for files, scale DB vertically/horizontally as needed
-* Use Redis for caching and as session/OTP store
-* Make backend stateless where possible to enable horizontal scaling
+Recommended future fix:
 
----
+- move to random IV per record
+- prefer AES-256-GCM
+- use separate indexed hash/HMAC field for lookup if deterministic email lookup is needed
 
-## 20. Future roadmap (prioritized clusters)
+7.2 OTP storage is inconsistent
 
-**Phase 1 (stabilize & productionize)**
+Current state:
 
-* Move files to object storage (S3)
-* Fix encryption design (random IV or AEAD)
-* Add Redis for OTP and rate-limiting
-* Harden CI/CD and secrets handling
+- registration OTP uses redis service with fallback
+- forgot-password OTP uses in-memory store directly
 
-**Phase 2 (trust & payments)**
+Risk:
 
-* Payment integration (Razorpay / Stripe) + reconcile UI in admin panel
-* Add invoice & receipt generation
-* Implement cryptographic signatures (private key sign + public key verification)
+- behavior differs across flows
+- in-memory OTP is not good for scaled or restarted environments
 
-**Phase 3 (trust-verifiable & scale)**
+Recommended future fix:
 
-* Public verification improvements: QR + mobile-friendly page + API
-* Certificate anchoring (blockchain) for immutable proof
-* Multi-tenant / multiple institutes support
-* Analytics dashboard (issued certificates, rejection reasons, SLA)
+- unify all OTP flows on Redis-backed TTL storage
 
-**Phase 4 (product & ecosystem)**
+7.3 Duplicate/legacy structure still exists
 
-* Native mobile apps (React Native)
-* SSO integration (SAML/OAuth with institutional accounts)
-* Webhooks for external integrations (ERP, SMS providers)
+Current examples:
 
----
+- `Student.js` re-export wrapper exists alongside `Student.model.js`
+- inactive route files still remain in repo
+- commented route mounting in `app.js`
 
-## 21. Migration & upgrade plan (payments, encryption)
+Risk:
 
-* If adding payments later: include `paymentId`, `paymentStatus`, `paymentAttempts` on Application model. Allow `AwaitingPayment` → `Submitted` transition only after payment success callback.
-* For encryption rotation: add `encryptionVersion` and `iv` fields. Implement background job to re-encrypt old records under new key/version.
+- confusion for future development
+- accidental edits in unused files
 
----
+Recommended future fix:
 
-## 22. Acceptance criteria & sample test cases
+- cleanup and standardize module usage after next feature milestone
 
-**Acceptance criteria**:
+7.4 Upload storage is local only
 
-* Student can register (OTP) and login.
-* Student can create draft application with file upload and later submit it.
-* Admin can view, search, approve/reject with comments.
-* Approval triggers PDF generation, stores PDF and sends email.
-* Public verification returns valid status for issued certificate.
+Current state:
 
-**Sample test cases**:
+- files stored locally in uploads folder
 
-* `should register user via OTP flow`
-* `should save draft application with files`
-* `should reject files with invalid mime-type`
-* `should only allow admin to approve application`
-* `should generate PDF and attach certificateId on approval`
+Risk:
 
----
+- not suitable for multi-server or production deployment
+- files can be lost with server reset or deployment issues
 
-## 23. Operational handover (what to provide to devs or Gemini Pro)
+Recommended future fix:
 
-Prior to handing to another dev / model, provide:
+- move to S3 or equivalent object storage
 
-* Authority signature image + seal
-* SMTP credentials & template samples
-* `process.env` schema (list of required env variables)
-* DB sample dump (if migrating)
-* Access to S3 or object storage (if available)
-* Clear policy on certificateId format and revocation rules
+7.5 Email delivery setup is basic
 
----
+Current state:
 
-## 24. Known risks & mitigations
+- Gmail transporter
+- skipped if credentials are missing
 
-* **Risk**: Using fixed IV for encryption — *mitigation*: migrate to random IV or AEAD.
-* **Risk**: File upload abuse — *mitigation*: strict validation, presigned uploads, virus scanning.
-* **Risk**: Email failing to deliver (spam) — *mitigation*: configure SPF/DKIM/DMARC + reliable provider.
-* **Risk**: OTP exhaustion/DDOS — *mitigation*: robust rate-limiting with Redis and IP blocking.
+Future need:
 
----
+- production-grade transactional provider
+- better retry and logging strategy
 
-## 25. Deliverables you can request immediately (I can generate now)
+------------------------------------------------------------
+8. Current MVP Status Assessment
+------------------------------------------------------------
 
-* README.md or single-file spec (this document can be exported)
-* OpenAPI (Swagger) spec scaffold for all endpoints
-* Postman collection for testing flows
-* Example code stubs for controllers and routes (Node/Express)
-* Mongoose schemas for models above
-* Jest test skeletons for major flows
+The project is currently between "core student MVP" and "full certificate platform".
 
----
+More specifically:
 
-## 26. Closing notes — candid, encouraging, and forward-looking
+- Student onboarding: completed
+- Student authentication: completed
+- Password recovery: completed
+- Dashboard integration: completed
+- Draft application flow: completed
+- Final student submission flow: completed
+- Admin processing flow: not completed
+- Certificate issuance flow: not completed
+- Public verification flow: not completed
+- Production hardening: partially completed
 
-You already have a strong functional core: two-step OTP flows, draft/save behavior, file upload, admin approvals, and certificate generation pipeline — these are the hardest building blocks. However, the encryption approach and file storage strategy need immediate attention before a production rollout. If you prioritize security fixes (encryption, OTP hardening, file scanning) and move files to object storage, you will increase trust dramatically. From there, adding payment and cryptographic signing should proceed incrementally.
+So the best current milestone label is:
 
-This document is intentionally pragmatic: it preserves your current architecture and codebase structure while prescribing realistic, prioritized improvements that will transition the system from an experimental project to an auditable, production-ready platform.
+"Student-side MVP complete, admin-side issuance MVP pending."
 
----
+------------------------------------------------------------
+9. Recommended Future Development Plan
+------------------------------------------------------------
 
-*End of specification. Next actions are listed in the final section — select any deliverable you'd like produced now and I will generate it in this session.*
+This is the most practical sequence for future development from the current state.
 
+Phase 1: Complete the certificate workflow
 
+Priority tasks:
 
+- build admin authentication
+- build admin dashboard for pending applications
+- add approve/reject/hold actions
+- generate certificate number on approval
+- add approval/rejection comments flow
+- show final application outcome in student dashboard
 
+Reason:
 
+- This completes the core business loop already started by the student portal
 
+Phase 2: Issue final certificate artifacts
 
------------------------------------------------------------------------------------------------
+Priority tasks:
 
+- create certificate template
+- generate PDF certificate
+- store PDF path/metadata
+- expose certificate download to student
+- email issued certificate to student
 
-____NOTES____
+Reason:
 
+- Without this, the system can collect applications but cannot complete certificate delivery
 
-The First and Most Important Change: Separating Your Server from Your App
-Right now, your server.js file is doing two jobs:
+Phase 3: Add verification and trust layer
 
-Configuring the Express application (setting up CORS, routes, etc.).
+Priority tasks:
 
-Starting the HTTP server to listen for requests.
+- public verification page
+- verification API by certificate number
+- QR code on generated certificate
+- status for revoked/invalid certificates if needed later
 
-Best Practice: We should split these into two files:
+Reason:
 
-app.js: This file will set up and export our Express application. It will contain all the rules and routes. It's like the blueprint of our car.
+- This makes issued certificates externally useful and verifiable
 
-server.js: This file's only job is to import the app, connect it to the internet (start the server), and connect it to the database. It's like turning the key in the ignition.
+Phase 4: Harden backend for production
 
-Why we do this: This separation is crucial for testing. Our tests can import the app directly to test our API routes without actually needing to start a live server and use a network connection. This makes our tests faster, more reliable, and is the professional standard.
+Priority tasks:
 
+- replace fixed-IV encryption
+- unify OTP store on Redis
+- move uploads to object storage
+- add better logging and centralized error handling
+- add validation layer for request payloads
+- expand automated tests
 
+Reason:
 
+- These changes improve safety and maintainability before real deployment
 
+Phase 5: Cleanup and architecture alignment
 
+Priority tasks:
 
+- remove or rewire unused route groups
+- standardize model imports
+- decide final route organization
+- document environment variables and setup
+- create proper README and API reference
 
+Reason:
 
---------------------------
+- This will reduce confusion as the project gets larger
 
-1-> In simple terms: try...catch is a safety net. You try to run your main code, and you catch any errors that happen so you can handle them without crashing your entire server.
+------------------------------------------------------------
+10. Immediate Next Sprint Recommendation
+------------------------------------------------------------
 
-2-> Step 2: Run the Redis Command
-Once Docker Desktop is running, open your regular terminal (like Git Bash, Command Prompt, or PowerShell) and run this single command:
+If we continue development from here, the best next sprint is:
 
-Bash
+"Admin review and certificate approval workflow."
 
-docker run -d -p 6379:6379 --name my-redis-server redis
-What this command does:
+Suggested sprint scope:
 
-docker run: The main command to run a container.
+- create admin model
+- create admin auth endpoints
+- create admin dashboard page
+- list submitted/pending certificate applications
+- approve/reject application with comment
+- update student dashboard to show final decision
 
--d:  (Detached mode) This tells Docker to run the container in the background, so it doesn't take over your terminal.
+This is the highest-value next step because it converts the current student submission system into an actual review-and-issue workflow.
 
--p 6379:6379: (Port mapping) This forwards traffic from port 6379 on your computer to port 6379 inside the container. Redis uses this port by default.
+------------------------------------------------------------
+11. Final Current-State Conclusion
+------------------------------------------------------------
 
---name my-redis-server: This gives your container a memorable name.
+Development completed till now is meaningful and substantial.
 
-redis: This is the name of the official Redis image on Docker Hub. Docker will automatically download it for you if you don't have it.
+The project already includes:
 
+- a real backend
+- a real frontend
+- OTP registration
+- login
+- forgot password
+- dashboard integration
+- file upload application flow
+- draft editing
+- submission to pending review
+- integration testing for main student flows
 
+The project does not yet include the full final certificate lifecycle, but the foundation for that next phase is now clearly in place.
+
+In simple words:
+
+We have successfully built the student side of the character certificate system and connected it end to end. The next major development chapter should focus on the admin approval and certificate issuing side.
+
+------------------------------------------------------------
+12. Sharp Sprint Plan
+------------------------------------------------------------
+
+This section converts the roadmap into an execution plan.
+
+Sprint 1: Admin authentication and admin backend
+
+Goal:
+
+- create secure admin access so only authorized staff can review applications
+
+Tasks:
+
+- create `Admin` model with name, email, password, role
+- hash admin password before save
+- create admin login endpoint
+- create admin JWT middleware
+- create protected admin route group
+- seed first admin account manually
+- add tests for admin login and unauthorized access
+
+Expected output:
+
+- admin can log in
+- admin token works on protected admin APIs
+- student token cannot access admin APIs
+
+Sprint 2: Admin application review workflow
+
+Goal:
+
+- let admin see submitted applications and take actions
+
+Tasks:
+
+- create admin controller for list view
+- add filters by status, roll number, name, date
+- add endpoint to view one application in detail
+- add approve action
+- add reject action with required comment
+- add hold action with comment
+- store admin comments in certificate record
+- update certificate status lifecycle clearly
+
+Expected output:
+
+- admin can review all pending applications
+- status changes are saved and visible
+- student dashboard can later reflect review results
+
+Sprint 3: Student dashboard status enhancement
+
+Goal:
+
+- show the student exactly what happened after submission
+
+Tasks:
+
+- update dashboard API response to include review comments
+- show approved, rejected, held statuses in UI
+- show rejection reason or hold reason
+- disable edit flow after final decision unless re-opened by admin
+- improve progress visualization on frontend
+
+Expected output:
+
+- student clearly sees current decision and next action
+
+Sprint 4: Certificate number generation and PDF generation
+
+Goal:
+
+- generate the actual certificate after approval
+
+Tasks:
+
+- decide certificate number format
+- add counter or unique generator for certificate number
+- create HTML template for character certificate
+- render PDF on approval
+- save PDF path or metadata in DB
+- expose secure download endpoint
+- attach certificate file in email or provide download link
+
+Expected output:
+
+- approved application produces downloadable certificate
+
+Sprint 5: Public verification system
+
+Goal:
+
+- allow external verification of issued certificates
+
+Tasks:
+
+- create public verify API by certificate number
+- create public verification page in frontend
+- add QR code on certificate PDF linking to verify page
+- only show minimum safe certificate data
+
+Expected output:
+
+- anyone can verify if a certificate is genuine
+
+Sprint 6: Redis OTP unification and backend hardening
+
+Goal:
+
+- make OTP system reliable and production-ready
+
+Tasks:
+
+- move forgot-password OTP to Redis service
+- standardize OTP save, verify, expiry, and delete logic
+- optionally hash OTP before storing
+- add resend cooldown logic
+- add attempt counter and temporary lockout
+- expand tests around expiry and resend limits
+
+Expected output:
+
+- all OTP flows behave consistently
+- OTP data survives multi-request backend flow better than in-memory logic
+
+------------------------------------------------------------
+13. What We Can Develop In Future
+------------------------------------------------------------
+
+After the next core sprints, future development can move in several directions.
+
+13.1 Core product future
+
+- admin analytics dashboard
+- activity logs for every major action
+- profile edit flow with OTP confirmation
+- downloadable submission receipt
+- multiple certificate requests history
+- notifications center in student dashboard
+
+13.2 Trust and verification future
+
+- QR verification on all issued certificates
+- revocation support for invalid certificates
+- digital signature support
+- tamper-evident certificate hash storage
+- public verification API for institutional use
+
+13.3 Scale and institution future
+
+- multi-admin roles such as reviewer and super-admin
+- multi-college or multi-department support
+- institute branding management
+- bulk application processing
+- export to CSV and reports
+
+13.4 Infrastructure future
+
+- S3 or cloud storage for uploads and PDFs
+- background jobs for email and PDF generation
+- structured logs and monitoring
+- Docker deployment
+- CI/CD pipeline
+
+------------------------------------------------------------
+14. Recommended Stack For Future Development
+------------------------------------------------------------
+
+The current stack is good enough to continue. We do not need a full rewrite.
+
+Recommended stack:
+
+Frontend:
+
+- React
+- Vite
+- React Router
+- Axios
+- current UI system already used in project
+
+Backend:
+
+- Node.js
+- Express
+- Mongoose
+- JWT for auth
+
+Data and caching:
+
+- MongoDB for permanent data
+- Redis for OTP, expiry-based temporary state, rate-limit support, and short-lived caching
+
+File handling:
+
+- Multer for development
+- S3 or Cloudinary or similar for production file storage
+
+Document generation:
+
+- HTML + CSS template
+- Puppeteer for PDF generation
+
+Email:
+
+- Nodemailer for development
+- SendGrid, Brevo, Postmark, or similar for production
+
+Testing:
+
+- Jest
+- Supertest
+- MongoMemoryServer
+
+Why this stack is a good fit:
+
+- it matches what is already built
+- it avoids unnecessary migration cost
+- Redis fits naturally for OTP and temporary verification flows
+- Puppeteer is practical for certificate PDF layout
+- MongoDB is already suitable for current data model shape
+
+------------------------------------------------------------
+15. How We Will Build The Next Features
+------------------------------------------------------------
+
+15.1 Admin panel
+
+Backend:
+
+- add admin model
+- create admin auth controller and routes
+- create admin middleware
+- create certificate review controller for admin actions
+
+Frontend:
+
+- create separate admin login page
+- create admin dashboard page
+- add applications table and filter controls
+- add approve, reject, hold actions with modal or form
+
+Learning point:
+
+- this teaches role-based access control, route protection, and state transitions in real projects
+
+15.2 Certificate approval and issuance
+
+Backend:
+
+- when admin clicks approve, backend validates application state
+- backend generates certificate number
+- backend renders certificate template into PDF
+- backend stores certificate path
+- backend updates application status to approved
+
+Frontend:
+
+- admin sees success state
+- student sees approved state and download button
+
+Learning point:
+
+- this teaches workflow automation and transactional thinking
+
+15.3 Public verification
+
+Backend:
+
+- create public endpoint that checks certificate number
+- return only safe fields like name, rollNo, issue date, status
+
+Frontend:
+
+- create public page with certificate number input
+- show valid or invalid result clearly
+
+Learning point:
+
+- this teaches public-safe API design and trust-focused product thinking
+
+------------------------------------------------------------
+16. Redis OTP Plan And Learning Guide
+------------------------------------------------------------
+
+Redis should be used as the central OTP store for this project.
+
+16.1 Why Redis is the right choice
+
+Problem with in-memory OTP:
+
+- OTP disappears when server restarts
+- not safe if multiple backend instances are running
+- inconsistent between features
+
+Why Redis works well:
+
+- fast key-value store
+- built-in expiry support with TTL
+- good for temporary data
+- ideal for OTP, sessions, counters, cooldowns, and rate limits
+
+16.2 What data we should store in Redis
+
+For each OTP flow, store:
+
+- identifier such as email
+- OTP or hashed OTP
+- purpose such as `register`, `forgot-password`, `profile-edit`
+- optional user payload for registration
+- creation time
+- expiry time handled by Redis TTL
+- attempt count if we want brute-force protection
+
+Recommended key format:
+
+- `otp:register:<email>`
+- `otp:forgot-password:<email>`
+- `otp:profile-edit:<email>`
+
+16.3 How OTP flow should work
+
+Step 1: user requests OTP
+
+- backend validates request
+- backend generates 6-digit OTP
+- backend stores OTP data in Redis with TTL like 10 minutes
+- backend sends OTP through email
+
+Step 2: user submits OTP
+
+- backend reads Redis key
+- backend checks if key exists
+- backend compares submitted OTP
+- if valid, backend completes action
+- backend deletes key after successful verification
+
+Step 3: optional security checks
+
+- increment failed attempts
+- block after too many failed attempts
+- enforce resend cooldown
+
+16.4 Recommended implementation changes in this project
+
+Current target:
+
+- keep `backend/services/redis.service.js`
+- expand it into a generic OTP service
+- stop using `backend/utils/otpStore.js` directly for forgot-password flow
+
+Suggested service methods:
+
+- `saveOtpData(purpose, identifier, otp, data)`
+- `getOtpRecord(purpose, identifier)`
+- `verifyOtpAndGetData(purpose, identifier, enteredOtp)`
+- `clearOtpData(purpose, identifier)`
+- `incrementOtpAttempts(purpose, identifier)`
+
+Then update:
+
+- registration controller to use this format
+- forgot-password controller to use same Redis service
+- future profile edit controller to use same Redis service
+
+16.5 Better security version
+
+Instead of storing plain OTP in Redis:
+
+- hash OTP before saving
+- compare hashed submitted OTP during verification
+
+Why:
+
+- even temporary data should follow least-exposure principles
+
+Simple approach:
+
+- generate OTP
+- hash with SHA-256 or HMAC
+- store hash in Redis
+- email plain OTP to user
+- hash entered OTP during verify and compare
+
+16.6 Example development steps for Redis OTP feature
+
+Step 1:
+
+- refactor Redis service to support purpose-based keys
+
+Step 2:
+
+- move forgot-password OTP logic from `otpStore.js` into Redis service
+
+Step 3:
+
+- add TTL and delete-after-success verification in one place
+
+Step 4:
+
+- add attempt count and resend cooldown keys
+
+Step 5:
+
+- write integration tests for success, invalid OTP, expired OTP, and too many attempts
+
+Step 6:
+
+- remove old direct in-memory OTP usage except test fallback if needed
+
+16.7 What you will learn by implementing Redis OTP
+
+- how Redis differs from MongoDB
+- when to use temporary storage instead of permanent storage
+- how TTL works
+- how to design verification flows
+- how to secure OTP against brute force and replay
+- how services abstract repeated backend logic
+
+------------------------------------------------------------
+17. Step-By-Step Learning Path For You
+------------------------------------------------------------
+
+If your goal is not only to build but also to understand the implementation deeply, follow this learning order.
+
+Step 1: Understand the current flow
+
+Read these files carefully:
+
+- `backend/controllers/auth.controller.js`
+- `backend/controllers/passwordController.js`
+- `backend/services/redis.service.js`
+- `backend/utils/otpStore.js`
+- `backend/routes/auth.routes.js`
+- `backend/routes/passwordRoutes.js`
+
+Learn:
+
+- how request comes from route to controller
+- how controller calls service
+- how service stores OTP
+- how response goes back to frontend
+
+Step 2: Understand middleware and protection
+
+Read:
+
+- `backend/middleware/authMiddleware.js`
+- `backend/middleware/rateLimiter.js`
+
+Learn:
+
+- how JWT route protection works
+- how OTP request abuse is limited
+
+Step 3: Understand student workflow
+
+Read:
+
+- `backend/controllers/certificateController.js`
+- `backend/controllers/studentController.js`
+- `backend/models/certificate.js`
+- `frontend/student-dashboard/src/pages/Dashboard.jsx`
+
+Learn:
+
+- how backend and frontend connect
+- how draft and submit state changes happen
+
+Step 4: Build Redis OTP improvement yourself
+
+Do in this order:
+
+- change forgot-password flow to use Redis service
+- add purpose-based OTP keys
+- add resend cooldown
+- add failed-attempt limit
+- test all cases
+
+Step 5: Build admin workflow
+
+Do in this order:
+
+- admin model
+- admin login
+- admin middleware
+- admin certificate list
+- approve/reject/hold actions
+- frontend admin dashboard
+
+Step 6: Build certificate generation
+
+Do in this order:
+
+- certificate number generator
+- HTML template
+- Puppeteer PDF generation
+- store PDF metadata
+- student download
+- verification page
+
+------------------------------------------------------------
+18. My Recommended Working Style For This Project
+------------------------------------------------------------
+
+To make sure you learn implementation instead of only receiving finished code, we should work in this pattern:
+
+For each new feature:
+
+1. define the feature goal
+2. break it into backend, frontend, and data changes
+3. explain the flow in simple words
+4. implement one small part at a time
+5. test it immediately
+6. review what changed and why
+
+Best next learning sequence with me:
+
+- first Redis OTP unification
+- then admin authentication
+- then admin review workflow
+- then PDF generation
+- then public verification
+
+This order is good because each new feature builds on concepts from the previous one.

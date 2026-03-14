@@ -26,9 +26,13 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth.routes');
 const passwordRoutes = require("./routes/passwordRoutes");
 const studentRoutes = require('./routes/studentRoutes');
+const adminAuthRoutes = require("./admin/routes/adminAuth.routes");
+const adminLogRoutes = require("./admin/routes/adminLog.routes");
 app.use('/api/auth', authRoutes);
 app.use("/api/auth", passwordRoutes);
 app.use('/api/student', studentRoutes);
+app.use("/api/admin/auth", adminAuthRoutes);
+app.use("/api/admin/logs", adminLogRoutes);
 
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 

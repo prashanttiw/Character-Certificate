@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const app = require("../app");
 const Student = require("../models/Student");
+const ActivityLog = require("../models/ActivityLog");
 const otpStore = require("../utils/otpStore");
 
 let mongo;
@@ -27,6 +28,8 @@ afterAll(async () => {
 });
 
 describe("Full Character Certificate System Flow", () => {
+  const registerPurpose = "register";
+  const forgotPasswordPurpose = "forgot-password";
   const email = "testuser@example.com";
   const password = "Test@1234";
   let token;
@@ -45,7 +48,7 @@ describe("Full Character Certificate System Flow", () => {
   });
 
   it("should verify OTP and register student", async () => {
-    const otp = otpStore.getOtpData(email)?.otp;
+    const otp = otpStore.getOtpData(registerPurpose, email)?.otp;
     const res = await request(app).post("/api/auth/register/verify-otp").send({ email, otp });
 
     console.log("RESPONSE (Verify OTP):", res.body);
@@ -71,8 +74,19 @@ describe("Full Character Certificate System Flow", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("should reject an invalid forgot-password OTP before the correct one is used", async () => {
+    const res = await request(app).post("/api/auth/forgot-password/verify-otp").send({
+      email,
+      otp: "000000",
+      newPassword: "NewTest@123"
+    });
+
+    console.log("RESPONSE (Invalid Forgot Password OTP):", res.body);
+    expect(res.statusCode).toBe(401);
+  });
+
   it("should reset password after verifying OTP", async () => {
-    const otp = otpStore.getOtpData(email)?.otp;
+    const otp = otpStore.getOtpData(forgotPasswordPurpose, email)?.otp;
     const res = await request(app).post("/api/auth/forgot-password/verify-otp").send({
       email,
       otp,
@@ -133,6 +147,25 @@ describe("Full Character Certificate System Flow", () => {
     expect(res.body.status).toBe("Draft");
   });
 
+  it("should submit the latest certificate draft for review", async () => {
+    const res = await request(app)
+      .post("/api/student/submit-latest")
+      .set("Authorization", `Bearer ${token}`);
+
+    console.log("RESPONSE (Submit Latest):", res.body);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should fetch application status as pending after submission", async () => {
+    const res = await request(app)
+      .get("/api/student/status")
+      .set("Authorization", `Bearer ${token}`);
+
+    console.log("RESPONSE (Status After Submit):", res.body);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.status).toBe("Pending");
+  });
+
   it("should not allow excessive OTP requests (rate limiter)", async () => {
     for (let i = 0; i < 5; i++) {
       await request(app).post("/api/auth/register/send-otp").send({
@@ -163,5 +196,41 @@ describe("Full Character Certificate System Flow", () => {
 
     console.log("RESPONSE (Invalid JWT):", res.body);
     expect(res.statusCode).toBe(401);
+  });
+
+  it("should store immutable activity logs for the completed flow", async () => {
+    const logs = await ActivityLog.find({}).sort({ createdAt: 1, _id: 1 });
+    const actions = logs.map((log) => log.action);
+
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        "auth.registration.otp_requested",
+        "auth.registration.completed",
+        "auth.login.succeeded",
+        "auth.password_reset.otp_requested",
+        "auth.password_reset.otp_verification_failed",
+        "auth.password_reset.completed",
+        "certificate.application.draft_created",
+        "student.dashboard.viewed",
+        "certificate.application.status_checked",
+        "certificate.application.submitted",
+        "certificate.review.received",
+      ])
+    );
+  });
+
+  it("should reject updates and deletes on activity logs", async () => {
+    const existingLog = await ActivityLog.findOne({});
+
+    await expect(
+      ActivityLog.updateOne(
+        { _id: existingLog._id },
+        { $set: { action: "tampered.action" } }
+      )
+    ).rejects.toThrow(/immutable/i);
+
+    await expect(
+      ActivityLog.deleteOne({ _id: existingLog._id })
+    ).rejects.toThrow(/immutable/i);
   });
 });

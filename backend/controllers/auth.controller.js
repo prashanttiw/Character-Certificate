@@ -8,6 +8,9 @@ const registrationOtpTemplate = require("../utils/emailTemplates/registrationOtp
 const { comparePassword } = require("../utils/hashUtils");
 const { encryptField } = require("../utils/encryptionUtils");
 const { saveOtpData, verifyOtpAndGetData } = require('../services/redis.service');
+const { createActivityLog } = require("../services/activityLog.service");
+
+const REGISTER_OTP_PURPOSE = "register";
 
 const findStudentByEmail = async (email) => {
   const normalizedEmail = email?.trim().toLowerCase();
@@ -40,7 +43,32 @@ const startRegistration = async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
     // Temporarily save user data and OTP to Redis with a 10-minute expiration
-    await saveOtpData(email, otp, { name, email, rollNo, mobile, password });
+    const otpSaveResult = await saveOtpData(REGISTER_OTP_PURPOSE, email, otp, {
+      name,
+      email,
+      rollNo,
+      mobile,
+      password,
+    });
+
+    if (!otpSaveResult.isStored) {
+      return res.status(429).json({
+        message: `Please wait ${otpSaveResult.retryAfterSeconds} seconds before requesting a new OTP.`,
+      });
+    }
+
+    await createActivityLog({
+      actorType: "system",
+      actorLabel: email?.trim()?.toLowerCase() || null,
+      action: "auth.registration.otp_requested",
+      entityType: "student_registration",
+      entityId: rollNo?.trim()?.toUpperCase() || null,
+      details: {
+        email: email?.trim()?.toLowerCase(),
+        rollNo: rollNo?.trim()?.toUpperCase(),
+      },
+      req,
+    });
 
     // Send the OTP to the student's email
     const html = registrationOtpTemplate(name, otp);
@@ -64,11 +92,23 @@ const verifyRegistration = async (req, res) => {
     const { email, otp } = req.body;
 
     // This single function securely checks Redis for a matching and valid OTP
-    const tempUserData = await verifyOtpAndGetData(email, otp);
+    const verification = await verifyOtpAndGetData(
+      REGISTER_OTP_PURPOSE,
+      email,
+      otp
+    );
 
-    if (!tempUserData) {
-      return res.status(400).json({ message: "Invalid or expired OTP. Please try registering again." });
+    if (!verification.isValid) {
+      const statusCode = verification.reason === "too_many_attempts" ? 429 : 400;
+      const message =
+        verification.reason === "too_many_attempts"
+          ? "Too many invalid OTP attempts. Please request a new OTP."
+          : "Invalid or expired OTP. Please try registering again.";
+
+      return res.status(statusCode).json({ message });
     }
+
+    const tempUserData = verification.data;
 
     const student = new Student({
       name: tempUserData.name,
@@ -80,6 +120,20 @@ const verifyRegistration = async (req, res) => {
     });
     
     await student.save();
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "auth.registration.completed",
+      entityType: "student",
+      entityId: student._id,
+      details: {
+        studentId: student.studentId,
+        rollNo: student.rollNo,
+      },
+      req,
+    });
 
     return res.status(201).json({ message: "Registration successful! You can now log in." });
 
@@ -121,6 +175,19 @@ const login = async (req, res) => {
       subject: "Security Alert: New Login to Your Account",
       html: loginHtml
     }).catch(err => console.error("Failed to send login alert email:", err));
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "auth.login.succeeded",
+      entityType: "student",
+      entityId: student._id,
+      details: {
+        studentId: student.studentId,
+      },
+      req,
+    });
 
     return res.status(200).json({
       message: "Login successful",

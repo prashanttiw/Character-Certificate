@@ -5,10 +5,11 @@ const passwordChangedTemplate = require("../utils/emailTemplates/passwordChanged
 const { encryptField } = require("../utils/encryptionUtils");
 const {
   saveOtpData,
-  verifyOtp,
-  clearOtpData,
-  isOtpExpired,
-} = require("../utils/otpStore");
+  verifyOtpAndGetData,
+} = require("../services/redis.service");
+const { createActivityLog } = require("../services/activityLog.service");
+
+const FORGOT_PASSWORD_OTP_PURPOSE = "forgot-password";
 
 const findStudentByEmail = async (email) => {
   const normalizedEmail = email?.trim().toLowerCase();
@@ -37,7 +38,28 @@ const sendForgotPasswordOtp = async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     // Save OTP only in memory, not DB
-    saveOtpData(email, otp, { purpose: "reset-password" });
+    const otpSaveResult = await saveOtpData(FORGOT_PASSWORD_OTP_PURPOSE, email, otp, {
+      purpose: "reset-password",
+    });
+
+    if (!otpSaveResult.isStored) {
+      return res.status(429).json({
+        message: `Please wait ${otpSaveResult.retryAfterSeconds} seconds before requesting a new OTP.`,
+      });
+    }
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "auth.password_reset.otp_requested",
+      entityType: "student",
+      entityId: student._id,
+      details: {
+        studentId: student.studentId,
+      },
+      req,
+    });
 
     const html = generateResetOTPTemplate(student.name, otp);
     await sendEmail({
@@ -66,25 +88,68 @@ const resetPassword = async (req, res) => {
         .json({ message: "Email, OTP, and New Password are required" });
     }
 
-    if (isOtpExpired(email)) {
-      clearOtpData(email);
-      return res
-        .status(410)
-        .json({ message: "OTP expired. Please request again." });
-    }
-
-    if (!verifyOtp(email, otp)) {
-      return res.status(401).json({ message: "Invalid OTP. Try again." });
-    }
-
     const student = await findStudentByEmail(email);
 
     if (!student) return res.status(404).json({ message: "Student not found" });
 
+    const verification = await verifyOtpAndGetData(
+      FORGOT_PASSWORD_OTP_PURPOSE,
+      email,
+      otp
+    );
+
+    if (!verification.isValid) {
+      if (student) {
+        await createActivityLog({
+          actorType: "student",
+          actorId: student._id,
+          actorLabel: student.rollNo,
+          action: "auth.password_reset.otp_verification_failed",
+          entityType: "student",
+          entityId: student._id,
+          status:
+            verification.reason === "expired" || verification.reason === "too_many_attempts"
+              ? "failure"
+              : "info",
+          details: {
+            reason: verification.reason,
+            attemptsLeft: verification.attemptsLeft ?? null,
+          },
+          req,
+        });
+      }
+
+      const statusCode =
+        verification.reason === "expired"
+          ? 410
+          : verification.reason === "too_many_attempts"
+            ? 429
+            : 401;
+      const message =
+        verification.reason === "expired"
+          ? "OTP expired. Please request again."
+          : verification.reason === "too_many_attempts"
+            ? "Too many invalid OTP attempts. Please request a new OTP."
+            : "Invalid OTP. Try again.";
+
+      return res.status(statusCode).json({ message });
+    }
+
     student.password = newPassword;
     await student.save();
 
-    clearOtpData(email);
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "auth.password_reset.completed",
+      entityType: "student",
+      entityId: student._id,
+      details: {
+        studentId: student.studentId,
+      },
+      req,
+    });
 
     const html = passwordChangedTemplate(student.name);
     await sendEmail({

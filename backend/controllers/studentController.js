@@ -1,5 +1,6 @@
 const Student = require("../models/Student");
 const Certificate = require("../models/certificate");
+const { createActivityLog } = require("../services/activityLog.service");
 
 // Controller: Get logged-in student's dashboard
 const getStudentDashboard = async (req, res) => {
@@ -14,6 +15,21 @@ const getStudentDashboard = async (req, res) => {
 
     // Fetch the latest certificate application
     const certificate = await Certificate.findOne({ student: studentId }).sort({ createdAt: -1 });
+
+    await createActivityLog({
+      actorType: "student",
+      actorId: student._id,
+      actorLabel: student.rollNo,
+      action: "student.dashboard.viewed",
+      entityType: "student",
+      entityId: student._id,
+      status: "info",
+      details: {
+        applicationId: certificate?._id || null,
+        applicationStatus: certificate?.status || "No application",
+      },
+      req,
+    });
 
     return res.status(200).json({
       message: "Dashboard data fetched successfully",
